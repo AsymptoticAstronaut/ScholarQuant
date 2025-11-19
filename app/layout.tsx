@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Yasser Noori | Profile',
+  title: 'Claude Project',
   description: 'Yasser Noori\'s Personal website.',
 }
 

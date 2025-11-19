@@ -1,55 +1,30 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
-import { XIcon } from 'lucide-react'
+import Link from 'next/link'
+import { Github } from 'lucide-react'
+
+import { AnimatedBackground } from '@/components/ui/animated-background'
 import { Spotlight } from '@/components/ui/spotlight'
 import { Magnetic } from '@/components/ui/magnetic'
-import {
-  MorphingDialog,
-  MorphingDialogTrigger,
-  MorphingDialogContent,
-  MorphingDialogClose,
-  MorphingDialogContainer,
-} from '@/components/ui/morphing-dialog'
-import Link from 'next/link'
-import { AnimatedBackground } from '@/components/ui/animated-background'
-import {
-  PROJECTS,
-  WORK_EXPERIENCE,
-  // BLOG_POSTS, // ⛔ Commented out
-  EMAIL,
-  SOCIAL_LINKS,
-} from './data'
 
-// === Typing animation keyframes ===
-const typing = {
-  hidden: { width: 0 },
-  visible: {
-    width: '100%',
-    transition: {
-      duration: 2,
-      ease: 'easeInOut',
-    },
-  },
-}
-
-const blink = {
-  visible: {
-    opacity: [1, 0],
-    transition: {
-      duration: 0.8,
-      repeat: Infinity,
-      ease: 'easeInOut',
-    },
-  },
-}
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.15 },
+    transition: { staggerChildren: 0.12 },
   },
 }
 
@@ -60,585 +35,662 @@ const VARIANTS_SECTION = {
 
 const TRANSITION_SECTION = { duration: 0.3 }
 
-/* ---------- SKILLS DATA (categories kept for headings but badges are rendered without wrapper divs) ---------- */
-const SKILL_CATEGORIES = [
+type DimensionId =
+  | 'academics'
+  | 'leadership'
+  | 'community'
+  | 'need'
+  | 'innovation'
+  | 'research'
+  | 'adversity'
+
+type Dimension = {
+  id: DimensionId
+  label: string
+  frequency: number // 0–100, across all scholarships
+}
+
+const DIMENSIONS: Dimension[] = [
+  { id: 'academics', label: 'Academics', frequency: 68 },
+  { id: 'leadership', label: 'Leadership', frequency: 81 },
+  { id: 'community', label: 'Community Impact', frequency: 77 },
+  { id: 'need', label: 'Financial Need', frequency: 54 },
+  { id: 'innovation', label: 'Innovation', frequency: 46 },
+  { id: 'research', label: 'Research', frequency: 39 },
+  { id: 'adversity', label: 'Adversity / Resilience', frequency: 61 },
+]
+
+type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
+
+type Scholarship = {
+  id: string
+  name: string
+  type: ScholarshipType
+  priorities: DimensionId[]
+  weights: Record<DimensionId, number> // 0–1
+  genericScore: number // 0–100
+  tailoredScore: number // 0–100
+}
+
+const SCHOLARSHIPS: Scholarship[] = [
   {
-    title: 'Languages',
-    badges: [
-      'TypeScript-3178C6?logo=typescript&logoColor=white',
-      'JavaScript-F7DF1E?logo=javascript&logoColor=black',
-      'Java-007396?logo=openjdk&logoColor=white',
-      'Python-3776AB?logo=python&logoColor=white',
-      'C%2B%2B-00599C?logo=cplusplus&logoColor=white',
-      'SQL-336791?logo=postgresql&logoColor=white',
-    ],
+    id: 'sch1',
+    name: 'Merit Excellence Grant',
+    type: 'Merit',
+    priorities: ['academics', 'leadership', 'research'],
+    weights: {
+      academics: 0.45,
+      leadership: 0.25,
+      community: 0.1,
+      need: 0.05,
+      innovation: 0.05,
+      research: 0.08,
+      adversity: 0.02,
+    },
+    genericScore: 58,
+    tailoredScore: 86,
   },
   {
-    title: 'Security',
-    badges: [
-      'Cryptography-7C3AED?logo=keybase&logoColor=white',
-      'OAuth_2.0-FF4088?logo=auth0&logoColor=white',
-      'OWASP-2C3E50?logo=owasp&logoColor=white',
-      'Authentication-0078D7?logo=keycloak&logoColor=white',
-      'Encryption-0A66C2?logo=lock&logoColor=white',
-    ],
+    id: 'sch2',
+    name: 'Community Builder Scholarship',
+    type: 'Community',
+    priorities: ['community', 'leadership', 'adversity'],
+    weights: {
+      academics: 0.1,
+      leadership: 0.25,
+      community: 0.4,
+      need: 0.1,
+      innovation: 0.05,
+      research: 0.02,
+      adversity: 0.08,
+    },
+    genericScore: 52,
+    tailoredScore: 81,
   },
   {
-    title: 'Cloud',
-    badges: [
-      'AWS-FF9900?logo=amazonaws&logoColor=white',
-      'Firebase-FFCA28?logo=firebase&logoColor=black',
-      'Google_Cloud-4285F4?logo=googlecloud&logoColor=white',
-      'Docker-2496ED?logo=docker&logoColor=white',
-      'GitHub_Actions-2088FF?logo=githubactions&logoColor=white',
-      'Linux-FCC624?logo=linux&logoColor=black',
-    ],
+    id: 'sch3',
+    name: 'STEM Innovator Award',
+    type: 'STEM',
+    priorities: ['innovation', 'research', 'academics'],
+    weights: {
+      academics: 0.25,
+      leadership: 0.12,
+      community: 0.06,
+      need: 0.03,
+      innovation: 0.32,
+      research: 0.16,
+      adversity: 0.06,
+    },
+    genericScore: 61,
+    tailoredScore: 84,
   },
   {
-    title: 'Machine Learning',
-    badges: [
-      'OpenAI-412991?logo=openai&logoColor=white',
-      'TensorFlow-FF6F00?logo=tensorflow&logoColor=white',
-      'HuggingFace-FFD21E?logo=huggingface&logoColor=black',
-      'Cohere-6B4EFF?logo=cohere&logoColor=white',
-      'NumPy-013243?logo=numpy&logoColor=white',
-      'Jupyter-F37626?logo=jupyter&logoColor=white',
-    ],
+    id: 'sch4',
+    name: 'First-Gen Access Bursary',
+    type: 'Access',
+    priorities: ['need', 'adversity', 'community'],
+    weights: {
+      academics: 0.12,
+      leadership: 0.12,
+      community: 0.2,
+      need: 0.3,
+      innovation: 0.04,
+      research: 0.02,
+      adversity: 0.2,
+    },
+    genericScore: 55,
+    tailoredScore: 79,
   },
 ]
 
-type ProjectVideoProps = { src: string }
-
-function ProjectVideo({ src }: ProjectVideoProps) {
-  return (
-    <MorphingDialog
-      transition={{
-        type: 'spring',
-        bounce: 0,
-        duration: 0.3,
-      }}
-    >
-      <MorphingDialogTrigger>
-        <video
-          src={src}
-          autoPlay
-          loop
-          muted
-          className="aspect-video w-full cursor-zoom-in rounded-xl"
-        />
-      </MorphingDialogTrigger>
-      <MorphingDialogContainer>
-	  
-        <MorphingDialogContent className="z-[999] relative aspect-video rounded-2xl bg-zinc-50 p-1 ring-1 ring-zinc-200/50 ring-inset dark:bg-zinc-950 dark:ring-zinc-800/50">
-          <video
-            src={src}
-            autoPlay
-            loop
-            muted
-            className="aspect-video h-[50vh] w-full rounded-xl md:h-[70vh]"
-          />
-        </MorphingDialogContent>
-        <MorphingDialogClose
-          className="z-[997] fixed top-6 right-6 h-fit w-fit rounded-full bg-white p-1"
-          variants={{
-            initial: { opacity: 0 },
-            animate: { opacity: 1, transition: { delay: 0.3, duration: 0.1 } },
-            exit: { opacity: 0, transition: { duration: 0 } },
-          }}
-        >
-          <XIcon className="h-5 w-5 text-zinc-500" />
-        </MorphingDialogClose>
-      </MorphingDialogContainer>
-    </MorphingDialog>
-  )
+type ScholarshipDashboardProps = {
+  // optional props later if you want to pass data from server
 }
 
-function MagneticSocialLink({
-  children,
-  link,
-}: {
-  children: React.ReactNode
-  link: string
-}) {
-  return (
-    <Magnetic springOptions={{ bounce: 0 }} intensity={0.3}>
-      <a
-        href={link}
-        className="group relative inline-flex shrink-0 items-center gap-[1px] rounded-full bg-zinc-100 px-2.5 py-1 text-sm text-black transition-colors duration-200 hover:bg-zinc-950 hover:text-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
-      >
-        {children}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 15 15"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-3 w-3"
-        >
-          <path
-            d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z"
-            fill="currentColor"
-            fillRule="evenodd"
-            clipRule="evenodd"
-          ></path>
-        </svg>
-      </a>
-    </Magnetic>
-  )
+function typeBadge(type: ScholarshipType) {
+  const map: Record<ScholarshipType, string> = {
+    Merit: 'Merit',
+    Community: 'Community',
+    STEM: 'STEM / Research',
+    Access: 'Access / Equity',
+  }
+  return map[type]
 }
 
-export default function Personal() {
-  // Typing component state & timing
-  const TEXT = "Hey, I'm Yasser!"
-  const TYPING_SPEED_MS = 90 // ms per character
-  const AFTER_SHOW_ROCKET_MS = 160 // keep cursor briefly after rocket appears
-  const START_SHAKE_AFTER_MS = 220 // start shaking shortly after cursor hides
+export default function ScholarshipDashboard(_props: ScholarshipDashboardProps) {
+  const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>(
+    SCHOLARSHIPS[0]?.id ?? ''
+  )
 
-  const [display, setDisplay] = useState('') // currently displayed text
-  const [cursorVisible, setCursorVisible] = useState(true)
-  const [showRocket, setShowRocket] = useState(false)
-  const [rocketShaking, setRocketShaking] = useState(false)
+  const selectedScholarship = useMemo(
+    () => SCHOLARSHIPS.find((s) => s.id === selectedScholarshipId) ?? SCHOLARSHIPS[0],
+    [selectedScholarshipId]
+  )
 
-  const idxRef = useRef(0)
-  const intervalRef = useRef<number | null>(null)
-  const finishTimerRef = useRef<number | null>(null)
-  const shakeTimerRef = useRef<number | null>(null)
+  const totalScholarships = SCHOLARSHIPS.length
+  const totalProfiles = 3
+  const totalDrafts = 18
 
-  useEffect(() => {
-    // Start typing
-    intervalRef.current = window.setInterval(() => {
-      const i = idxRef.current
-      if (i < TEXT.length) {
-        setDisplay((s) => s + TEXT[i])
-        idxRef.current = i + 1
-      } else {
-        // finished typing
-        if (intervalRef.current) {
-          window.clearInterval(intervalRef.current)
-          intervalRef.current = null
-        }
-        // show rocket immediately
-        setShowRocket(true)
+  const avgGenericScore =
+    SCHOLARSHIPS.reduce((acc, s) => acc + s.genericScore, 0) / totalScholarships
+  const avgTailoredScore =
+    SCHOLARSHIPS.reduce((acc, s) => acc + s.tailoredScore, 0) / totalScholarships
+  const avgGain = Math.round(avgTailoredScore - avgGenericScore)
 
-        // briefly keep cursor, then hide cursor and start shaking
-        finishTimerRef.current = window.setTimeout(() => {
-          setCursorVisible(false)
-        }, AFTER_SHOW_ROCKET_MS)
+  const maxFreq = Math.max(...DIMENSIONS.map((d) => d.frequency))
 
-        shakeTimerRef.current = window.setTimeout(() => {
-          setRocketShaking(true)
-        }, START_SHAKE_AFTER_MS)
-      }
-    }, TYPING_SPEED_MS)
+  const topDimension = useMemo(
+    () => DIMENSIONS.slice().sort((a, b) => b.frequency - a.frequency)[0],
+    []
+  )
 
-    return () => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current)
-      if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current)
-      if (shakeTimerRef.current) window.clearTimeout(shakeTimerRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const sortedWeights = useMemo(
+    () =>
+      Object.entries(selectedScholarship.weights)
+        .map(([id, weight]) => {
+          const dim = DIMENSIONS.find((d) => d.id === id)!
+          return { id: id as DimensionId, label: dim.label, weight }
+        })
+        .sort((a, b) => b.weight - a.weight),
+    [selectedScholarship]
+  )
 
   return (
-    <motion.main
-      className="space-y-12"
+    <motion.div
+      className="relative min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 text-zinc-50"
       variants={VARIANTS_CONTAINER}
       initial="hidden"
       animate="visible"
     >
-      {/* === HERO INTRO: Typing text + shaking rocket (replaced old block) === */}
-      <motion.section className="pt-8 text-center md:text-left">
-        <motion.div
-          className="text-3xl md:text-5xl text-zinc-900 dark:text-zinc-50"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span style={{ whiteSpace: 'pre' }}>{display}</span>
+      <AnimatedBackground className="pointer-events-none" />
 
-          {/* blinking cursor (only while visible) */}
-          {cursorVisible && (
-            <motion.span
-              className="ml-1 text-zinc-900 dark:text-zinc-100"
-              aria-hidden
-              animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              |
-            </motion.span>
-          )}
+      {/* main area shifts right because Sidebar adds md:ml-64 to #app-root */}
+      <div className="relative z-10 flex min-h-screen flex-col">
+        {/* Top bar */}
+        <header className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-4">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+              Claude Project · Track 3
+            </p>
+            <h1 className="text-lg font-semibold text-zinc-50 md:text-xl">
+              Scholarship Control Center
+            </h1>
+          </div>
 
-          {/* rocket - appears after typing finishes */}
-          {showRocket && (
-            <motion.span
-              className="ml-2 inline-block"
-              initial={{ opacity: 0, y: 6, rotate: 0 }}
-              animate={
-                rocketShaking
-                  ? {
-                      opacity: 1,
-                      rotate: [0, -8, 8, -5, 5, 0],
-                      x: [0, -2, 2, -1.5, 1.5, 0],
-                      y: [0, 2, -2, 1, -1, 0],
-                    }
-                  : { opacity: 1, y: 0, rotate: 0 }
-              }
-              transition={
-                rocketShaking
-                  ? { duration: 1.4, repeat: Infinity, repeatDelay: 2.6, ease: 'easeInOut' }
-                  : { duration: 0.28, ease: 'easeOut' }
-              }
-              aria-hidden
-            >
-              🚀
-            </motion.span>
-          )}
-        </motion.div>
-      </motion.section>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>Claude status: Ready</span>
+            </div>
 
-      {/* === INTRO TEXT === */}
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <div className="flex-1">
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Security-focused software engineer skilled in TypeScript, React
-            Native, and AWS, with experience in GitHub Actions, cloud security,
-            and vulnerability remediation. Experienced in secure system design,
-            MFA integration, and OWASP-aligned development.
-          </p>
-        </div>
-		
-		  <a
-            href="/portfolio"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex mt-5 items-center w-fit text-zinc-800 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            <Separator orientation="vertical" className="h-6 bg-zinc-700" />
+
+            <Magnetic intensity={0.3} springOptions={{ bounce: 0 }}>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 rounded-full border-zinc-700 bg-zinc-900/80 text-xs text-zinc-200 hover:bg-zinc-800"
+              >
+                <Link href="https://github.com/AsymptoticAstronaut/Claude" target="_blank">
+                  <Github className="h-3.5 w-3.5" />
+                  <span>View repo</span>
+                </Link>
+              </Button>
+            </Magnetic>
+          </div>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto px-6 pb-10 pt-6">
+          <motion.div
+            className="space-y-6"
+            variants={VARIANTS_CONTAINER}
+            initial="hidden"
+            animate="visible"
           >
-            <span className="font-medium mr-2">Explore Projects</span>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="none" width="16" height="16" className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-              <path
-                d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z"
-                fill="currentColor"
-              />
-            </svg>
-          </a>
-		  
-      </motion.section>
-	  
-	  
-	        <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-	          <h3 className="mb-5 text-lg font-medium">Education</h3>
-
-{/* University of Toronto — corrected (professional wording) */}
-<a
-  className="relative overflow-hidden rounded-2xl bg-zinc-300/30 p-[1px] dark:bg-zinc-600/30 block"
-  href="#"
-  onClick={(e) => e.preventDefault()}
-  aria-label="University of Toronto — Bachelor of Science"
->
-<Spotlight
-  className="from-amber-300 via-amber-200 to-amber-100 blur-2xl dark:from-amber-400 dark:via-amber-300 dark:to-amber-200"
-  size={64}
-/>
-
-
-  <div className="relative h-full w-full rounded-[15px] bg-white p-4 dark:bg-zinc-950">
-    <div className="relative flex w-full flex-row justify-between">
-      <div>
-        <h4 className="font-normal dark:text-zinc-300">
-          University of Toronto
-        </h4>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Honours B.Sc. in Computer Science & Economics
-        </p>
-      </div>
-
-      <div className="text-sm text-zinc-600 dark:text-zinc-400">
-        <div>Expected 2023 - 2027</div>
-      </div>
-    </div>
-
-    <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-      Relevant Coursework: Algebraic Cryptography (Audit), Formal Methods, Algorithms & Data Structures.<br/>
-	  Member of the Google Student Developer Club and OISE InnovED accelerator program.
-    </p>
-  </div>
-</a>
-      </motion.section>
-	
-
-
-      {/* === WORK EXPERIENCE === */}
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-5 text-lg font-medium">Work Experience</h3>
-        <div className="flex flex-col space-y-2">
-          {WORK_EXPERIENCE.map((job) => (
-            <a
-              className="relative overflow-hidden rounded-2xl bg-zinc-300/30 p-[1px] dark:bg-zinc-600/30"
-              href={job.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              key={job.id}
+            {/* Row 1: KPIs + Pattern Lab */}
+            <motion.section
+              variants={VARIANTS_SECTION}
+              transition={TRANSITION_SECTION}
+              className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
             >
-              <Spotlight
-                className="from-zinc-900 via-zinc-800 to-zinc-700 blur-2xl dark:from-zinc-100 dark:via-zinc-200 dark:to-zinc-50"
-                size={64}
-              />
-              <div className="relative h-full w-full rounded-[15px] bg-white p-4 dark:bg-zinc-950">
-                <div className="relative flex w-full flex-row justify-between">
-                  <div>
-                    <h4 className="font-normal dark:text-zinc-100">
-                      {job.title}
-                    </h4>
-                    <p className="text-zinc-500 dark:text-zinc-400">
-                      {job.company}
+              {/* KPIs + Next Best Action */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-sky-500/30 via-sky-400/20 to-sky-300/10 blur-2xl"
+                  size={120}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    System summary
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    End-to-end view of scholarships, profiles, and draft performance.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <KpiTile label="Scholarships analyzed" value={totalScholarships} />
+                    <KpiTile label="Student profiles" value={totalProfiles} />
+                    <KpiTile label="Drafts generated" value={totalDrafts} />
+                    <KpiTile
+                      label="Avg. alignment gain"
+                      value={`+${avgGain}`}
+                      subtle="pts over generic"
+                      accent
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/80 px-3 py-2.5 text-xs text-zinc-300">
+                    <p className="mb-1 font-medium text-zinc-100">
+                      Next best action
+                    </p>
+                    <p className="text-[11px] text-zinc-400">
+                      Two scholarships have lower tailored scores (&lt;80). Generate or
+                      refine drafts for them to close the gap versus generic
+                      applications.
                     </p>
                   </div>
-                  <p className="text-zinc-600 dark:text-zinc-400">
-                    {job.start} - {job.end}
-                  </p>
-                </div>
-              </div>
-            </a>
-          ))}
-        </div>
-      </motion.section>	  
+                </CardContent>
+              </Card>
 
-      {/* === SKILLS (inserted directly, badges only — no wrapper divs around badges) === */}
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-        aria-label="Skills"
+              {/* Pattern Lab Overview */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-emerald-500/40 via-emerald-400/20 to-emerald-300/10 blur-2xl"
+                  size={100}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Pattern Lab overview
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Scholarship priorities detected across the dataset.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3">
+                  <div className="space-y-1.5">
+                    {DIMENSIONS.map((dim) => (
+                      <div key={dim.id} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                          <span>{dim.label}</span>
+                          <span>{dim.frequency}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-900">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-sky-500 via-emerald-400 to-emerald-300"
+                            style={{
+                              width: `${(dim.frequency / maxFreq) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-zinc-800/80 pt-2 text-[11px] text-zinc-400">
+                    <p>
+                      Claude insight:{' '}
+                      <span className="text-zinc-200">
+                        {topDimension.label} appears most frequently in this dataset.
+                        Drafts should consistently surface it when relevant.
+                      </span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.section>
+
+            {/* Row 2: Scholarships + Comparison + Explainability */}
+            <motion.section
+              variants={VARIANTS_SECTION}
+              transition={TRANSITION_SECTION}
+              className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)]"
+            >
+              {/* Scholarship Library Snapshot */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-zinc-500/40 via-zinc-400/20 to-zinc-300/10 blur-2xl"
+                  size={90}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Scholarship library
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Personality tags and detected priorities per scholarship.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-2">
+                  <div className="space-y-1.5 text-xs">
+                    {SCHOLARSHIPS.map((sch) => (
+                      <button
+                        key={sch.id}
+                        type="button"
+                        onClick={() => setSelectedScholarshipId(sch.id)}
+                        className={`flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition ${
+                          sch.id === selectedScholarship.id
+                            ? 'bg-zinc-900/90 ring-1 ring-sky-500/60'
+                            : 'bg-zinc-950/60 hover:bg-zinc-900/80'
+                        }`}
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <p className="truncate text-[13px] text-zinc-100">
+                            {sch.name}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0 text-[10px] text-zinc-200"
+                          >
+                            {typeBadge(sch.type)}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {sch.priorities.map((pid) => {
+                            const dim = DIMENSIONS.find((d) => d.id === pid)!
+                            return (
+                              <Badge
+                                key={pid}
+                                variant="outline"
+                                className="border-sky-700/70 bg-sky-900/30 px-1.5 py-0 text-[10px] text-sky-200"
+                              >
+                                {dim.label}
+                              </Badge>
+                            )
+                          })}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Draft Quality & Comparison */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
+                  size={90}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Draft performance vs generic
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Alignment scores comparing generic essays to AI-tailored drafts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3">
+                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
+                    <p>
+                      Average generic score:{' '}
+                      <span className="font-semibold text-zinc-50">
+                        {Math.round(avgGenericScore)}
+                      </span>
+                      {' · '}
+                      Tailored:{' '}
+                      <span className="font-semibold text-emerald-300">
+                        {Math.round(avgTailoredScore)}
+                      </span>
+                      {' · '}
+                      Gain:{' '}
+                      <span className="font-semibold text-emerald-300">
+                        +{avgGain}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5 text-[11px]">
+                    {SCHOLARSHIPS.map((sch) => {
+                      const gain = sch.tailoredScore - sch.genericScore
+                      return (
+                        <div
+                          key={sch.id}
+                          className="rounded-lg bg-zinc-950/90 px-2.5 py-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-[11px] text-zinc-200">
+                              {sch.name}
+                            </p>
+                            <span className="text-[11px] text-emerald-300">
+                              +{gain}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="mr-1 text-[10px] text-zinc-500">
+                              Generic
+                            </span>
+                            <div className="h-1.5 flex-1 rounded-full bg-zinc-900">
+                              <div
+                                className="h-full rounded-full bg-zinc-600"
+                                style={{ width: `${sch.genericScore}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="mr-1 text-[10px] text-zinc-500">
+                              Tailored
+                            </span>
+                            <div className="h-1.5 flex-1 rounded-full bg-zinc-900">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-sky-500 via-emerald-400 to-emerald-300"
+                                style={{ width: `${sch.tailoredScore}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Explainable Messaging Panel */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-emerald-500/40 via-emerald-400/20 to-emerald-300/10 blur-2xl"
+                  size={90}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Explainable messaging
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Why the draft emphasizes certain parts of the student story.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3 text-xs">
+                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2">
+                    <p className="text-[11px] text-zinc-400">Selected scholarship</p>
+                    <p className="text-[13px] font-medium text-zinc-100">
+                      {selectedScholarship.name}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge
+                        variant="outline"
+                        className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0 text-[10px] text-zinc-200"
+                      >
+                        {typeBadge(selectedScholarship.type)}
+                      </Badge>
+                      {selectedScholarship.priorities.map((pid) => {
+                        const dim = DIMENSIONS.find((d) => d.id === pid)!
+                        return (
+                          <Badge
+                            key={pid}
+                            variant="outline"
+                            className="border-emerald-600/70 bg-emerald-900/30 px-1.5 py-0 text-[10px] text-emerald-200"
+                          >
+                            {dim.label}
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {sortedWeights.map((entry) => (
+                      <div key={entry.id} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                          <span>{entry.label}</span>
+                          <span>{Math.round(entry.weight * 100)}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-900">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-400 to-sky-300"
+                            style={{ width: `${entry.weight * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-emerald-500/50 bg-emerald-900/20 px-3 py-2 text-[11px] text-emerald-100">
+                    <p className="mb-1 font-medium text-emerald-100">
+                      Messaging strategy
+                    </p>
+                    <p className="mb-1">
+                      {`Claude suggests leading with ${
+                        sortedWeights[0].label
+                      }, then supporting with ${sortedWeights[1].label.toLowerCase()} and ${sortedWeights[2].label.toLowerCase()}.`}
+                    </p>
+                    <p className="text-emerald-200/80">
+                      Open with a concrete example illustrating{' '}
+                      {sortedWeights[0].label.toLowerCase()}. Follow with a paragraph
+                      emphasizing {sortedWeights[1].label.toLowerCase()} and close by
+                      tying {sortedWeights[2].label.toLowerCase()} to your long-term
+                      goals.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.section>
+
+            {/* Row 3: Activity + Claude insight */}
+            <motion.section
+              variants={VARIANTS_SECTION}
+              transition={TRANSITION_SECTION}
+              className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]"
+            >
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-zinc-500/40 via-zinc-400/20 to-zinc-300/10 blur-2xl"
+                  size={100}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Activity timeline
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    End-to-end pipeline events for the demo dataset.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3 text-xs">
+                  <ul className="space-y-2">
+                    <TimelineItem
+                      time="12:04"
+                      label="Generated tailored draft for Community Builder Scholarship."
+                    />
+                    <TimelineItem
+                      time="11:57"
+                      label="Extracted priority weights for First-Gen Access Bursary."
+                    />
+                    <TimelineItem
+                      time="11:49"
+                      label="Imported 10 new STEM scholarships and ran Pattern Lab analysis."
+                    />
+                    <TimelineItem
+                      time="11:32"
+                      label="Created base student profile: 3 anchor stories added."
+                    />
+                    <TimelineItem
+                      time="11:20"
+                      label="Loaded demo dataset (25 scholarships, 3 profiles)."
+                    />
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
+                  size={90}
+                />
+                <CardHeader className="relative pb-2">
+                  <CardTitle className="text-sm text-zinc-50">
+                    Claude insight capsule
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    High-level guidance derived from pattern and draft analysis.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3 text-xs">
+                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
+                    <p className="mb-1 font-medium text-zinc-100">
+                      Portfolio-level guidance
+                    </p>
+                    <p>
+                      {`Across this dataset, ${topDimension.label.toLowerCase()} appears more often than traditional GPA language. Applications that open with a concrete story about impact tend to align best with the detected patterns.`}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-sky-600/60 bg-sky-900/20 px-3 py-2 text-[11px] text-sky-100">
+                    <p className="mb-1 font-medium text-sky-100">
+                      Demo callout
+                    </p>
+                    <p>
+                      In your live demo, highlight how the same base student story can be
+                      reframed for the Merit Excellence Grant and the Community Builder
+                      Scholarship using these weight profiles.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.section>
+          </motion.div>
+        </main>
+      </div>
+    </motion.div>
+  )
+}
+
+function KpiTile({
+  label,
+  value,
+  subtle,
+  accent,
+}: {
+  label: string
+  value: number | string
+  subtle?: string
+  accent?: boolean
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-zinc-800/80 bg-zinc-950/80 px-3 py-2">
+      <span className="text-[11px] text-zinc-400">{label}</span>
+      <span
+        className={`mt-1 text-lg font-semibold ${
+          accent ? 'text-emerald-300' : 'text-zinc-50'
+        }`}
       >
-        <h3 className="mb-4 text-lg font-medium">Skills</h3>
-
-        {/* Render category heading followed directly by badge images (no div wrappers) */}
-        {SKILL_CATEGORIES.map((cat, ci) => (
-          <motion.span
-            key={cat.title}
-            className="block mb-3"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 * ci, duration: 0.35 }}
-          >
-            <h3 className="mb-2">{cat.title}</h3>
-
-            {/* badges: plain images, inline, no extra container */}
-            {cat.badges.map((b, i) => (
-              <motion.img
-                key={b}
-                src={`https://img.shields.io/badge/${b}&style=for-the-badge`}
-                alt={b}
-                className="inline-block mr-2 mb-2 rounded-md select-none"
-                draggable={false}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.08 * i + 0.04 * ci, duration: 0.35 }}
-              />
-            ))}
-          </motion.span>
-        ))}
-      </motion.section>
-	  
-	  {/* ---------- CERTIFICATIONS (same card style as Work Experience) ---------- */}
-<motion.section
-  variants={VARIANTS_SECTION}
-  transition={TRANSITION_SECTION}
-  aria-label="Certifications"
->
-  <h3 className="mb-5 text-lg font-medium">Certifications</h3>
-
-  <div className="flex flex-col md:flex-row gap-4">
-    {/* Cert 1 */}
-    <a
-      className="relative overflow-hidden rounded-2xl bg-zinc-300/30 p-[1px] dark:bg-zinc-600/30 md:w-1/3 block"
-      href="#"
-      onClick={(e) => e.preventDefault()}
-      aria-label="Advanced Learning Algorithms — Stanford"
-    >
-      <Spotlight
-        className="from-zinc-900 via-zinc-800 to-zinc-700 blur-2xl dark:from-zinc-100 dark:via-zinc-200 dark:to-zinc-50"
-        size={48}
-      />
-
-      <div className="relative h-full w-full rounded-[15px] bg-white p-4 dark:bg-zinc-950">
-        <div className="flex w-full items-start justify-between">
-          <div>
-            <h4 className="font-normal dark:text-zinc-100">
-              Advanced Learning Algorithms
-            </h4>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Stanford University
-            </p>
-          </div>
-
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <div>2024</div>
-          </div>
-        </div>
-
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Covered supervised learning, optimization, regularization, TensorFlow, and practical model evaluation.
-        </p>
-      </div>
-    </a>
-
-    {/* Cert 2 */}
-    <a
-      className="relative overflow-hidden rounded-2xl bg-zinc-300/30 p-[1px] dark:bg-zinc-600/30 md:w-1/3 block"
-      href="#"
-      onClick={(e) => e.preventDefault()}
-      aria-label="LLMOps — Google"
-    >
-      <Spotlight
-        className="from-zinc-900 via-zinc-800 to-zinc-700 blur-2xl dark:from-zinc-100 dark:via-zinc-200 dark:to-zinc-50"
-        size={48}
-      />
-
-      <div className="relative h-full w-full rounded-[15px] bg-white p-4 dark:bg-zinc-950">
-        <div className="flex w-full items-start justify-between">
-          <div>
-            <h4 className="font-normal dark:text-zinc-100">LLMOps</h4>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Google</p>
-          </div>
-
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <div>2024</div>
-          </div>
-        </div>
-
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Practical MLOps for large language models: deployment, monitoring, and scaling best practices.
-        </p>
-      </div>
-    </a>
-
-    {/* Cert 3 */}
-    <a
-      className="relative overflow-hidden rounded-2xl bg-zinc-300/30 p-[1px] dark:bg-zinc-600/30 md:w-1/3 block"
-      href="#"
-      onClick={(e) => e.preventDefault()}
-      aria-label="Bloomberg Market Concepts — Bloomberg"
-    >
-      <Spotlight
-        className="from-zinc-900 via-zinc-800 to-zinc-700 blur-2xl dark:from-zinc-100 dark:via-zinc-200 dark:to-zinc-50"
-        size={48}
-      />
-
-      <div className="relative h-full w-full rounded-[15px] bg-white p-4 dark:bg-zinc-950">
-        <div className="flex w-full items-start justify-between">
-          <div>
-            <h4 className="font-normal dark:text-zinc-100">
-              Bloomberg Market Concepts
-            </h4>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Bloomberg</p>
-          </div>
-
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <div>2023</div>
-          </div>
-        </div>
-
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Fundamentals of market data, Bloomberg Terminal use, and macro/financial concepts.
-        </p>
-      </div>
-    </a>
-  </div>
-</motion.section>
- {/* === ADDITIONAL PROJECTS (Wonder 2 + QuizCraft) === */}
-<motion.section
-  variants={VARIANTS_SECTION}
-  transition={TRANSITION_SECTION}
->
-  <h3 className="mb-5 text-lg font-medium">Pinned Projects</h3>
-  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-    {/* QuizCraft (left) */}
-    <div className="space-y-2">
-      <div className="relative rounded-2xl bg-zinc-50/40 p-1 ring-1 ring-zinc-200/50 ring-inset dark:bg-zinc-950/40 dark:ring-zinc-800/50">
-        <ProjectVideo src="/videos/quizcraft.mp4" />
-      </div>
-      <div className="px-1">
-        <a
-          className="font-base group relative inline-block font-[450] text-zinc-900 dark:text-zinc-50"
-          href="https://github.com/AsymptoticAstronaut/QuizCraft"
-          target="_blank"
-        >
-          QuizCraft
-          <span className="absolute bottom-0.5 left-0 block h-[1px] w-full max-w-0 bg-zinc-900 dark:bg-zinc-50 transition-all duration-200 group-hover:max-w-full"></span>
-        </a>
-        <p className="text-base text-zinc-600 dark:text-zinc-400">
-          AI-powered Java Swing quiz generator using Cohere NLP APIs, enabling automatic study question creation and collaborative editing.
-        </p>
-      </div>
+        {value}
+      </span>
+      {subtle && (
+        <span className="mt-0.5 text-[10px] text-zinc-500">
+          {subtle}
+        </span>
+      )}
     </div>
+  )
+}
 
-    {/* Wonder 2 (right) */}
-    <div className="space-y-2">
-      <div className="relative rounded-2xl bg-zinc-50/40 p-1 ring-1 ring-zinc-200/50 ring-inset dark:bg-zinc-950/40 dark:ring-zinc-800/50">
-        <ProjectVideo src="/videos/wonder2.mp4" />
+function TimelineItem({ time, label }: { time: string; label: string }) {
+  return (
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center pt-0.5">
+        <span className="text-[10px] text-zinc-500">{time}</span>
+        <span className="mt-1 h-6 w-px bg-zinc-800" />
       </div>
-      <div className="px-1">
-        <a
-          className="font-base group relative inline-block font-[450] text-zinc-900 dark:text-zinc-50"
-          href="https://playwonder.ca"
-          target="_blank"
-        >
-          Wonder 2.0
-          <span className="absolute bottom-0.5 left-0 block h-[1px] w-full max-w-0 bg-zinc-900 dark:bg-zinc-50 transition-all duration-200 group-hover:max-w-full"></span>
-        </a>
-        <p className="text-base text-zinc-600 dark:text-zinc-400">
-Advanced sequel built with Phaser, Node.js, Firebase, AWS; integrated OpenAI for adaptive feedback, OAuth2 auth, classroom dashboards, and reading-comprehension analytics.        </p>
-      </div>
-	  
-    </div>
-	  		  <a
-            href="/portfolio"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center w-fit ml-1 text-zinc-800 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            <span className="font-medium mr-2">View More</span>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="none" width="16" height="16" className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-              <path
-                d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z"
-                fill="currentColor"
-              />
-            </svg>
-          </a>
-  </div>
-  
-</motion.section> 
-	  
-
-      {/* === CONNECT === */}
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-5 text-lg font-medium">Connect</h3>
-        <p className="mb-5 text-zinc-600 dark:text-zinc-400">
-          Feel free to contact me at{' '}
-          <a className="underline dark:text-zinc-300" href={`mailto:${EMAIL}`}>
-            {EMAIL}
-          </a>
-        </p>
-        <div className="flex items-center justify-start space-x-3">
-          {SOCIAL_LINKS.map((link) => (
-            <MagneticSocialLink key={link.label} link={link.link}>
-              {link.label}
-            </MagneticSocialLink>
-          ))}
-        </div>
-      </motion.section>
-    </motion.main>
+      <p className="flex-1 text-[11px] text-zinc-300">{label}</p>
+    </li>
   )
 }
