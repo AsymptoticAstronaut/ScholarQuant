@@ -70,8 +70,8 @@ export function Sidebar() {
     { href: '/', label: 'Dashboard', Icon: LayoutDashboard },
     { href: '/scholarships', label: 'Scholarships', Icon: BookOpenCheck },
     { href: '/profiles', label: 'Student Profiles', Icon: UserCircle2 },
-    { href: '/drafts', label: 'Draft Studio', Icon: FileText },
     { href: '/pattern-lab', label: 'Pattern Lab', Icon: Activity },
+    { href: '/drafts', label: 'Draft Studio', Icon: FileText },
   ]
 
   const secondaryItems = [
