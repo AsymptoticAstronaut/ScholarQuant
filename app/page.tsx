@@ -202,7 +202,7 @@ export default function ScholarshipDashboard(_props: ScholarshipDashboardProps) 
       initial="hidden"
       animate="visible"
     >
-      <AnimatedBackground className="pointer-events-none" />
+
 
       {/* main area shifts right because Sidebar adds md:ml-64 to #app-root */}
       <div className="relative z-10 flex min-h-screen flex-col">
