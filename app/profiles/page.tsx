@@ -13,7 +13,6 @@ import {
   BookOpenCheck,
 } from 'lucide-react'
 
-import { AnimatedBackground } from '@/components/ui/animated-background'
 import { Spotlight } from '@/components/ui/spotlight'
 import { Magnetic } from '@/components/ui/magnetic'
 
@@ -27,8 +26,10 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
+import type { DimensionId } from '@/lib/stores/scholarships-store'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
@@ -44,15 +45,6 @@ const VARIANTS_SECTION = {
 }
 
 const TRANSITION_SECTION = { duration: 0.3 }
-
-type DimensionId =
-  | 'academics'
-  | 'leadership'
-  | 'community'
-  | 'need'
-  | 'innovation'
-  | 'research'
-  | 'adversity'
 
 type Dimension = {
   id: DimensionId
@@ -131,153 +123,23 @@ const TYPE_DIMENSION_MATRIX: Record<ScholarshipType, Record<DimensionId, number>
   },
 }
 
-type Story = {
-  id: string
-  title: string
-  summary: string
-  dimensionTags: DimensionId[]
-}
-
-type StudentProfile = {
-  id: string
-  name: string
-  program: string
-  year: string
-  tags: string[]
-  features: Record<DimensionId, number> // 0–1 importance from profile
-  stories: Story[]
-  stats: {
-    scholarshipsMatched: number
-    draftsGenerated: number
-    avgAlignment: number // 0–100
-  }
-}
-
-const STUDENTS: StudentProfile[] = [
-  {
-    id: 's1',
-    name: 'Maya Chen',
-    program: 'Computer Engineering',
-    year: '3rd year',
-    tags: ['Robotics', 'Women in STEM', 'Teaching'],
-    features: {
-      academics: 0.82,
-      leadership: 0.75,
-      community: 0.6,
-      need: 0.2,
-      innovation: 0.9,
-      research: 0.7,
-      adversity: 0.25,
-    },
-    stories: [
-      {
-        id: 's1-1',
-        title: 'Low-cost robotics kit for middle schools',
-        summary:
-          'Designed a low-cost robotics kit and ran weekend workshops for local middle schools, focusing on hands-on learning and accessible materials.',
-        dimensionTags: ['innovation', 'community', 'leadership'],
-      },
-      {
-        id: 's1-2',
-        title: 'Undergraduate research in swarm robotics',
-        summary:
-          'Worked with a lab to prototype swarm coordination strategies and presented a poster at an undergraduate research conference.',
-        dimensionTags: ['research', 'academics', 'innovation'],
-      },
-    ],
-    stats: {
-      scholarshipsMatched: 9,
-      draftsGenerated: 12,
-      avgAlignment: 84,
-    },
-  },
-  {
-    id: 's2',
-    name: 'Ahmed Ali',
-    program: 'Health Studies & Public Policy',
-    year: '2nd year',
-    tags: ['Community health', 'Refugee support', 'Advocacy'],
-    features: {
-      academics: 0.7,
-      leadership: 0.8,
-      community: 0.95,
-      need: 0.35,
-      innovation: 0.45,
-      research: 0.4,
-      adversity: 0.6,
-    },
-    stories: [
-      {
-        id: 's2-1',
-        title: 'Neighbourhood health access project',
-        summary:
-          'Coordinated a weekly clinic information booth and translation support for newcomers navigating local healthcare.',
-        dimensionTags: ['community', 'leadership'],
-      },
-      {
-        id: 's2-2',
-        title: 'Refugee youth mentorship circle',
-        summary:
-          'Started a peer mentorship circle for refugee youth to share resources, study strategies, and mental health supports.',
-        dimensionTags: ['community', 'adversity', 'leadership'],
-      },
-    ],
-    stats: {
-      scholarshipsMatched: 11,
-      draftsGenerated: 15,
-      avgAlignment: 88,
-    },
-  },
-  {
-    id: 's3',
-    name: 'Lucia Rivera',
-    program: 'Economics & Sociology',
-    year: '1st generation · 4th year',
-    tags: ['First-gen', 'Work-study', 'Equity'],
-    features: {
-      academics: 0.75,
-      leadership: 0.45,
-      community: 0.6,
-      need: 0.95,
-      innovation: 0.3,
-      research: 0.35,
-      adversity: 0.9,
-    },
-    stories: [
-      {
-        id: 's3-1',
-        title: 'Working two jobs while studying full-time',
-        summary:
-          'Balanced two part-time jobs to cover tuition and family expenses while maintaining strong academic performance.',
-        dimensionTags: ['need', 'adversity', 'academics'],
-      },
-      {
-        id: 's3-2',
-        title: 'Campus equity research assistant',
-        summary:
-          'Assisted in a study on first-generation student outcomes and helped design a peer-support pilot program.',
-        dimensionTags: ['research', 'community', 'adversity'],
-      },
-    ],
-    stats: {
-      scholarshipsMatched: 13,
-      draftsGenerated: 17,
-      avgAlignment: 90,
-    },
-  },
-]
-
 export default function StudentProfilesPage() {
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(STUDENTS[0]?.id ?? '')
+  const profiles = useStudentProfileStore((s) => s.profiles)
+
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(
+    profiles[0]?.id ?? ''
+  )
   const [targetType, setTargetType] = useState<ScholarshipType>('Merit')
 
-  const selectedStudent =
-    useMemo(
-      () => STUDENTS.find((s) => s.id === selectedStudentId) ?? STUDENTS[0],
-      [selectedStudentId]
-    )
+  const selectedStudent = useMemo(() => {
+    if (profiles.length === 0) return undefined
+    if (!selectedStudentId) return profiles[0]
+    return profiles.find((s) => s.id === selectedStudentId) ?? profiles[0]
+  }, [profiles, selectedStudentId])
 
   const featureComparison = useMemo(() => {
+    if (!selectedStudent) return []
+
     const studentFeatures = selectedStudent.features
     const typeShape = TYPE_DIMENSION_MATRIX[targetType]
 
@@ -295,6 +157,14 @@ export default function StudentProfilesPage() {
     }).sort((a, b) => b.alignment - a.alignment)
   }, [selectedStudent, targetType])
 
+  if (!selectedStudent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-200">
+        No student profiles in store. Try resetting the store or adding profiles.
+      </div>
+    )
+  }
+
   return (
     <motion.div
       className="relative min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 text-zinc-50"
@@ -302,7 +172,6 @@ export default function StudentProfilesPage() {
       initial="hidden"
       animate="visible"
     >
-
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-4">
@@ -351,13 +220,13 @@ export default function StudentProfilesPage() {
             initial="hidden"
             animate="visible"
           >
-            {/* Row 1: Profile editor (left) + overview (right) */}
+            {/* Row 1: Profile selector + overview */}
             <motion.section
               variants={VARIANTS_SECTION}
               transition={TRANSITION_SECTION}
               className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]"
             >
-              {/* Profile fields / anchor stories */}
+              {/* Profile selector & stories */}
               <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
                 <Spotlight
                   className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
@@ -380,7 +249,7 @@ export default function StudentProfilesPage() {
                         Selected student
                       </label>
                       <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                        {STUDENTS.map((student) => (
+                        {profiles.map((student) => (
                           <button
                             key={student.id}
                             type="button"
@@ -581,9 +450,10 @@ export default function StudentProfilesPage() {
                       {typeLabel(targetType)}
                     </p>
                     <p className="mt-1 text-[11px] text-zinc-500">
-                      For demo: you can say “Now we ask Claude to treat Maya as a
+                      For demo: you can say “Now we ask Claude to treat{' '}
+                      {selectedStudent.name} as a
                       candidate for a {typeLabel(targetType)} scholarship. The bars
-                      below show where her existing stories already line up.”
+                      below show where their existing stories already line up.”
                     </p>
                   </div>
 

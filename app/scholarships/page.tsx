@@ -12,7 +12,6 @@ import {
   ListChecks,
 } from 'lucide-react'
 
-import { AnimatedBackground } from '@/components/ui/animated-background'
 import { Spotlight } from '@/components/ui/spotlight'
 import { Magnetic } from '@/components/ui/magnetic'
 
@@ -29,6 +28,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 
+import {
+  useScholarshipStore,
+  type ScholarshipType,
+  type DimensionId,
+} from '@/lib/stores/scholarships-store'
+
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
   visible: {
@@ -43,15 +48,6 @@ const VARIANTS_SECTION = {
 }
 
 const TRANSITION_SECTION = { duration: 0.3 }
-
-type DimensionId =
-  | 'academics'
-  | 'leadership'
-  | 'community'
-  | 'need'
-  | 'innovation'
-  | 'research'
-  | 'adversity'
 
 type Dimension = {
   id: DimensionId
@@ -68,125 +64,24 @@ const DIMENSIONS: Dimension[] = [
   { id: 'adversity', label: 'Adversity / Resilience' },
 ]
 
-type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
-
-type Scholarship = {
-  id: string
-  name: string
-  type: ScholarshipType
-  source: 'Manual' | 'Demo' | 'Imported'
-  descriptionSnippet: string
-  priorities: DimensionId[]
-  weights: Record<DimensionId, number> // 0–1
-  genericScore: number // 0–100
-  tailoredScore: number // 0–100
-}
-
-const SCHOLARSHIPS: Scholarship[] = [
-  {
-    id: 'sch1',
-    name: 'Merit Excellence Grant',
-    type: 'Merit',
-    source: 'Demo',
-    descriptionSnippet:
-      'Awarded to students with exceptional academic performance and demonstrated leadership in campus initiatives.',
-    priorities: ['academics', 'leadership', 'research'],
-    weights: {
-      academics: 0.45,
-      leadership: 0.25,
-      community: 0.1,
-      need: 0.05,
-      innovation: 0.05,
-      research: 0.08,
-      adversity: 0.02,
-    },
-    genericScore: 58,
-    tailoredScore: 86,
-  },
-  {
-    id: 'sch2',
-    name: 'Community Builder Scholarship',
-    type: 'Community',
-    source: 'Demo',
-    descriptionSnippet:
-      'Recognizes students who have created measurable impact through community service and grassroots organizing.',
-    priorities: ['community', 'leadership', 'adversity'],
-    weights: {
-      academics: 0.1,
-      leadership: 0.25,
-      community: 0.4,
-      need: 0.1,
-      innovation: 0.05,
-      research: 0.02,
-      adversity: 0.08,
-    },
-    genericScore: 52,
-    tailoredScore: 81,
-  },
-  {
-    id: 'sch3',
-    name: 'STEM Innovator Award',
-    type: 'STEM',
-    source: 'Demo',
-    descriptionSnippet:
-      'Supports students who have led technically innovative projects in STEM, with emphasis on experimentation and iteration.',
-    priorities: ['innovation', 'research', 'academics'],
-    weights: {
-      academics: 0.25,
-      leadership: 0.12,
-      community: 0.06,
-      need: 0.03,
-      innovation: 0.32,
-      research: 0.16,
-      adversity: 0.06,
-    },
-    genericScore: 61,
-    tailoredScore: 84,
-  },
-  {
-    id: 'sch4',
-    name: 'First-Gen Access Bursary',
-    type: 'Access',
-    source: 'Demo',
-    descriptionSnippet:
-      'Provides support for first-generation students facing financial barriers and systemic obstacles to accessing education.',
-    priorities: ['need', 'adversity', 'community'],
-    weights: {
-      academics: 0.12,
-      leadership: 0.12,
-      community: 0.2,
-      need: 0.3,
-      innovation: 0.04,
-      research: 0.02,
-      adversity: 0.2,
-    },
-    genericScore: 55,
-    tailoredScore: 79,
-  },
-]
-
 type WinnerPattern = {
   headline: string
   guidance: string
 }
 
+/** Keyed by scholarship id from the store */
 const WINNER_PATTERNS: Record<string, WinnerPattern> = {
-  sch1: {
+  'merit-excellence': {
     headline: 'Winners open with concrete academic breakthroughs.',
     guidance:
       'Past winners emphasize specific academic milestones (e.g., research papers, competitive exams) in the first paragraph, then layer in leadership and campus community impact—rather than listing every activity equally.',
   },
-  sch2: {
+  'community-builder': {
     headline: 'Impact first, titles second.',
     guidance:
       'Successful applications lead with a single community project and its measurable outcomes (hours volunteered, people served), and only then mention formal titles or positions. Storytelling around change beats lists of roles.',
   },
-  sch3: {
-    headline: 'Technical depth plus narrative of iteration.',
-    guidance:
-      'Winning essays weave a narrative of experimentation, failed prototypes, and design iterations. They describe technical choices at a high level, but always tie them back to the problem they were trying to solve.',
-  },
-  sch4: {
+  'first-gen-access': {
     headline: 'Resilience with specific financial context.',
     guidance:
       'Strong applications are explicit about financial constraints and first-gen barriers, but pair those details with resilience stories and concrete steps the student took to stay in school and support their family.',
@@ -204,38 +99,102 @@ function typeBadge(type: ScholarshipType) {
 }
 
 export default function ScholarshipsPage() {
-  const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>(
-    SCHOLARSHIPS[0]?.id ?? ''
-  )
+  const scholarships = useScholarshipStore((s) => s.scholarships)
+  const addScholarship = useScholarshipStore((s) => s.addScholarship)
+
+  const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>('')
 
   const [nameDraft, setNameDraft] = useState('')
   const [typeDraft, setTypeDraft] = useState<ScholarshipType | ''>('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
 
-  const selectedScholarship =
-    useMemo(
-      () => SCHOLARSHIPS.find((s) => s.id === selectedScholarshipId) ?? SCHOLARSHIPS[0],
-      [selectedScholarshipId]
-    )
+  const selectedScholarship = useMemo(() => {
+    if (scholarships.length === 0) return undefined
+    if (!selectedScholarshipId) return scholarships[0]
+    return scholarships.find((s) => s.id === selectedScholarshipId) ?? scholarships[0]
+  }, [scholarships, selectedScholarshipId])
 
   const avgGenericScore =
-    SCHOLARSHIPS.reduce((acc, s) => acc + s.genericScore, 0) / SCHOLARSHIPS.length
+    scholarships.reduce((acc, s) => acc + s.genericScore, 0) /
+    (scholarships.length || 1)
   const avgTailoredScore =
-    SCHOLARSHIPS.reduce((acc, s) => acc + s.tailoredScore, 0) / SCHOLARSHIPS.length
+    scholarships.reduce((acc, s) => acc + s.tailoredScore, 0) /
+    (scholarships.length || 1)
   const avgGain = Math.round(avgTailoredScore - avgGenericScore)
 
-  const sortedWeights = useMemo(
-    () =>
-      Object.entries(selectedScholarship.weights)
-        .map(([id, weight]) => {
-          const dim = DIMENSIONS.find((d) => d.id === id)!
-          return { id: id as DimensionId, label: dim.label, weight }
-        })
-        .sort((a, b) => b.weight - a.weight),
-    [selectedScholarship]
-  )
+  const sortedWeights = useMemo(() => {
+    if (!selectedScholarship) return []
+    return Object.entries(selectedScholarship.weights)
+      .map(([id, weight]) => {
+        const dim = DIMENSIONS.find((d) => d.id === id)!
+        return { id: id as DimensionId, label: dim.label, weight }
+      })
+      .sort((a, b) => b.weight - a.weight)
+  }, [selectedScholarship])
 
-  const winnerPattern = WINNER_PATTERNS[selectedScholarship.id]
+  const winnerPattern =
+    (selectedScholarship && WINNER_PATTERNS[selectedScholarship.id]) || {
+      headline: 'Pattern coming soon.',
+      guidance:
+        'Add winner examples or public essays for this scholarship to calibrate a success pattern.',
+    }
+function generateRandomWeights() {
+  const dims = [
+    'academics',
+    'leadership',
+    'community',
+    'need',
+    'innovation',
+    'research',
+    'adversity',
+  ]
+
+  // random value per dimension
+  const raw = dims.map(() => Math.random())
+
+  // normalize to sum to 1
+  const total = raw.reduce((a, b) => a + b, 0)
+
+  // return normalized weights
+  return Object.fromEntries(
+    dims.map((d, i) => [d, raw[i] / total])
+  ) as Record<DimensionId, number>
+}
+
+  function handleAnalyzeAndAdd() {
+    if (!nameDraft.trim() || !typeDraft || !descriptionDraft.trim()) return
+
+    // Very simple default weights (even split)
+// Generate random normalized weights (temporary stand-in for Claude analysis)
+const weights = generateRandomWeights()
+
+
+    // Naive priorities: first 3 dimensions (later: Claude-derived)
+    const priorities: DimensionId[] = DIMENSIONS.slice(0, 3).map((d) => d.id)
+
+    addScholarship({
+      name: nameDraft.trim(),
+      type: typeDraft,
+      source: 'Manual',
+      description: descriptionDraft.trim(),
+      priorities,
+      weights,
+      genericScore: 50,
+      tailoredScore: 80,
+    })
+
+    setNameDraft('')
+    setTypeDraft('')
+    setDescriptionDraft('')
+  }
+
+  if (!selectedScholarship) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-200">
+        No scholarships in store. Try refreshing or resetting the store.
+      </div>
+    )
+  }
 
   return (
     <motion.div
@@ -244,7 +203,6 @@ export default function ScholarshipsPage() {
       initial="hidden"
       animate="visible"
     >
-
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-4">
@@ -371,6 +329,7 @@ export default function ScholarshipsPage() {
                       <span>
                         In the full system, this will call Claude to extract priorities
                         and weights.
+                        
                       </span>
                     </div>
 
@@ -378,10 +337,11 @@ export default function ScholarshipsPage() {
                       <Button
                         type="button"
                         size="sm"
+                        onClick={handleAnalyzeAndAdd}
                         className="h-8 gap-1 rounded-full bg-sky-600 text-xs text-white hover:bg-sky-500"
                       >
                         <Wand2 className="h-3.5 w-3.5" />
-                        <span>Analyze with Claude</span>
+                        <span>Add Scholarship</span>
                       </Button>
                       <Button
                         type="button"
@@ -389,7 +349,7 @@ export default function ScholarshipsPage() {
                         size="sm"
                         className="h-8 rounded-full border-zinc-700 bg-zinc-900/80 text-xs text-zinc-200 hover:bg-zinc-800"
                       >
-                        Load demo example
+                        Load from URL
                       </Button>
                     </div>
                   </div>
@@ -412,7 +372,7 @@ export default function ScholarshipsPage() {
                 </CardHeader>
                 <CardContent className="relative space-y-4 text-xs">
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <KpiTile label="Scholarships in pool" value={SCHOLARSHIPS.length} />
+                    <KpiTile label="Scholarships in pool" value={scholarships.length} />
                     <KpiTile
                       label="Avg generic score"
                       value={Math.round(avgGenericScore)}
@@ -432,7 +392,7 @@ export default function ScholarshipsPage() {
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
                       {(['Merit', 'Community', 'STEM', 'Access'] as ScholarshipType[]).map(
                         (t) => {
-                          const count = SCHOLARSHIPS.filter((s) => s.type === t).length
+                          const count = scholarships.filter((s) => s.type === t).length
                           return (
                             <Badge
                               key={t}
@@ -489,40 +449,46 @@ export default function ScholarshipsPage() {
                       <span>Source</span>
                     </div>
                     <div className="divide-y divide-zinc-800/80">
-                      {SCHOLARSHIPS.map((sch) => (
-                        <button
-                          key={sch.id}
-                          type="button"
-                          onClick={() => setSelectedScholarshipId(sch.id)}
-                          className={`grid w-full grid-cols-[2fr_minmax(0,0.9fr)_minmax(0,0.9fr)] items-start gap-2 px-3 py-2 text-left transition ${
-                            sch.id === selectedScholarship.id
-                              ? 'bg-zinc-900/90 ring-1 ring-sky-500/60'
-                              : 'hover:bg-zinc-900/70'
-                          }`}
-                        >
-                          <div className="space-y-0.5">
-                            <p className="truncate text-[13px] text-zinc-100">
-                              {sch.name}
-                            </p>
-                            <p className="line-clamp-2 text-[11px] text-zinc-500">
-                              {sch.descriptionSnippet}
-                            </p>
-                          </div>
-                          <div className="flex items-center">
-                            <Badge
-                              variant="outline"
-                              className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0.5 text-[10px] text-zinc-200"
-                            >
-                              {typeBadge(sch.type)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="rounded-full bg-zinc-900/70 px-2 py-0.5 text-[10px] text-zinc-400">
-                              {sch.source}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
+                      {scholarships.map((sch) => {
+                        const snippet =
+                          sch.description.length > 140
+                            ? sch.description.slice(0, 137) + '…'
+                            : sch.description
+                        return (
+                          <button
+                            key={sch.id}
+                            type="button"
+                            onClick={() => setSelectedScholarshipId(sch.id)}
+                            className={`grid w-full grid-cols-[2fr_minmax(0,0.9fr)_minmax(0,0.9fr)] items-start gap-2 px-3 py-2 text-left transition ${
+                              sch.id === selectedScholarship.id
+                                ? 'bg-zinc-900/90 ring-1 ring-sky-500/60'
+                                : 'hover:bg-zinc-900/70'
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <p className="truncate text-[13px] text-zinc-100">
+                                {sch.name}
+                              </p>
+                              <p className="line-clamp-2 text-[11px] text-zinc-500">
+                                {snippet}
+                              </p>
+                            </div>
+                            <div className="flex items-center">
+                              <Badge
+                                variant="outline"
+                                className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0.5 text-[10px] text-zinc-200"
+                              >
+                                {typeBadge(sch.type)}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="rounded-full bg-zinc-900/70 px-2 py-0.5 text-[10px] text-zinc-400">
+                                {sch.source}
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </CardContent>
