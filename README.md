@@ -1,4 +1,5 @@
 UPDATES:
+- Nov 19:
 - can now add scholarships
 - ability to store json format for profiles/scholarships: https://claude-kappa-ten.vercel.app/json-demo
 - please see /lib/stores/scholarships-store.ts and /lib/stores/student-profiles-store.ts you can change the interfaces as u wish, (it will break the UI for scholarship/profiles but I will fix it once we finalize the protocol)
