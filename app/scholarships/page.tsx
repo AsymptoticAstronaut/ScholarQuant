@@ -349,7 +349,7 @@ const weights = generateRandomWeights()
                         size="sm"
                         className="h-8 rounded-full border-zinc-700 bg-zinc-900/80 text-xs text-zinc-200 hover:bg-zinc-800"
                       >
-                        Load from URL
+                        Load from
                       </Button>
                     </div>
                   </div>
