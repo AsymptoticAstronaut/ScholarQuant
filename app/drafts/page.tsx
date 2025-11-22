@@ -205,9 +205,8 @@ export default function DraftStudioPage() {
     [scholarshipsData]
   )
 
-  const [selectedProfileId, setSelectedProfileId] = useState<string>(
-    studentProfiles[0]?.id ?? ''
-  )
+  const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const setSelectedProfileId = useStudentProfileStore((s) => s.setSelectedProfileId)
   const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>(
     scholarshipOptions[0]?.id ?? ''
   )
@@ -229,14 +228,6 @@ export default function DraftStudioPage() {
         null,
       [selectedScholarshipId, scholarshipOptions]
     ) ?? null
-
-  useEffect(() => {
-    if (!studentProfiles.length) return
-    if (!selectedProfileId) setSelectedProfileId(studentProfiles[0].id)
-    if (!studentProfiles.some((p) => p.id === selectedProfileId)) {
-      setSelectedProfileId(studentProfiles[0].id)
-    }
-  }, [studentProfiles, selectedProfileId])
 
   useEffect(() => {
     if (!scholarshipOptions.length) return

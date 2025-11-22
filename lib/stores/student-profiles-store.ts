@@ -246,20 +246,27 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
 
 type StudentProfileState = {
   profiles: StudentProfile[]
+  selectedProfileId: string | null
   addProfile: (data: Omit<StudentProfile, 'id'> & { id?: string }) => void
   updateProfile: (id: string, patch: Partial<StudentProfile>) => void
   removeProfile: (id: string) => void
   resetToSeed: () => void
+  setSelectedProfileId: (id: string | null) => void
 }
 
 export const useStudentProfileStore = create<StudentProfileState>()(
   persist(
     (set, get) => ({
       profiles: SEED_STUDENT_PROFILES,
+      selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null,
       addProfile: (data) => {
         const id = data.id ?? crypto.randomUUID()
         const newProfile: StudentProfile = { ...data, id }
-        set({ profiles: [...get().profiles, newProfile] })
+        const profiles = [...get().profiles, newProfile]
+        set({
+          profiles,
+          selectedProfileId: get().selectedProfileId ?? id
+        })
       },
       updateProfile: (id, patch) => {
         set({
@@ -269,11 +276,22 @@ export const useStudentProfileStore = create<StudentProfileState>()(
         })
       },
       removeProfile: (id) => {
+        const nextProfiles = get().profiles.filter((p) => p.id !== id)
+        const nextSelected =
+          get().selectedProfileId === id
+            ? nextProfiles[0]?.id ?? null
+            : get().selectedProfileId
         set({
-          profiles: get().profiles.filter((p) => p.id !== id)
+          profiles: nextProfiles,
+          selectedProfileId: nextSelected
         })
       },
-      resetToSeed: () => set({ profiles: SEED_STUDENT_PROFILES })
+      resetToSeed: () =>
+        set({
+          profiles: SEED_STUDENT_PROFILES,
+          selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null
+        }),
+      setSelectedProfileId: (id) => set({ selectedProfileId: id })
     }),
     {
       name: 'agentiiv-student-profiles-v1',

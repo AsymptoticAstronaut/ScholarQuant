@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   Sun,
@@ -13,8 +13,11 @@ import {
   SlidersHorizontal,
   Mail,
   ExternalLink,
+  ChevronDown,
+  UserCircle2 as UserIcon,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 const EMAIL = 'yasser.noori@mail.utoronto.ca'
 const LINKEDIN = 'https://www.linkedin.com/in/yasser-noori'
@@ -24,8 +27,26 @@ export function Sidebar() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [studentMenuOpen, setStudentMenuOpen] = useState(false)
+  const studentMenuRef = useRef<HTMLDivElement>(null)
+  const studentProfiles = useStudentProfileStore((s) => s.profiles)
+  const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const setSelectedProfileId = useStudentProfileStore((s) => s.setSelectedProfileId)
+  const selectedStudent = useMemo(
+    () => studentProfiles.find((profile) => profile.id === selectedProfileId),
+    [selectedProfileId, studentProfiles]
+  )
 
   useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (!studentMenuRef.current) return
+      if (studentMenuRef.current.contains(event.target as Node)) return
+      setStudentMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
 
   // initial open on desktop
   useEffect(() => {
@@ -134,6 +155,86 @@ export function Sidebar() {
               </button>
             ) : (
               <div className="hidden h-4 w-4 md:inline-flex" aria-hidden />
+            )}
+          </div>
+
+          {/* Student selector */}
+          <div
+            ref={studentMenuRef}
+            className="relative z-10 border-b border-zinc-200/40 px-4 py-4 dark:border-zinc-800/60"
+          >
+            <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+              Drafting for
+            </p>
+            {studentProfiles.length ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStudentMenuOpen((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg border border-zinc-200/70 bg-white/70 px-3 py-2 text-left text-sm text-zinc-800 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800/70 dark:bg-zinc-900/70 dark:text-zinc-100"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {selectedStudent?.name ?? 'Select a student'}
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {selectedStudent
+                        ? `${selectedStudent.program} • ${selectedStudent.year}`
+                        : 'No student selected'}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 text-zinc-500 transition ${
+                      studentMenuOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                {studentMenuOpen && (
+                  <div className="mt-2 max-h-56 w-full overflow-y-auto rounded-lg border border-zinc-200/80 bg-white/90 text-sm shadow-lg dark:border-zinc-800/70 dark:bg-zinc-900/90">
+                    {studentProfiles.map((student) => (
+                      <button
+                        key={student.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProfileId(student.id)
+                          setStudentMenuOpen(false)
+                        }}
+                        className={`flex w-full items-start gap-3 px-3 py-2 text-left transition hover:bg-zinc-100/80 dark:hover:bg-zinc-800/70 ${
+                          student.id === selectedProfileId
+                            ? 'bg-zinc-100/70 dark:bg-zinc-800/60'
+                            : ''
+                        }`}
+                      >
+                        <div className="mt-0.5 rounded-full bg-zinc-200 p-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                          <UserIcon className="h-3.5 w-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                            {student.name}
+                          </p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {student.program}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {student.tags.slice(0, 2).map((tag) => (
+                              <span
+                                key={`${student.id}-${tag}`}
+                                className="rounded-full border border-zinc-200/80 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Add a student profile to start drafting.
+              </p>
             )}
           </div>
 
