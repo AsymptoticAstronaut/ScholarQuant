@@ -48,7 +48,7 @@ export type StudentProfile = {
     ielts: number
   }>
 
-  recommendedAlgorithms?: string[]
+  recommendedScholarshipIds: string[]
 
   features: Record<DimensionId, number>
   stories: StudentStory[]
@@ -75,10 +75,10 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
     workStatus: 'Part-time',
     financialNeedLevel: 'Low',
     awards: ['Dean’s List', 'Undergrad Research Poster Award'],
-    recommendedAlgorithms: [
-      'Personality Fit Scoring',
-      'Winner-Tilted Weights',
-      'Evidence Gap Analyzer',
+    recommendedScholarshipIds: [
+      'stem-innovation-award',
+      'innovation-challenge-grant',
+      'emerging-researcher-scholarship',
     ],
     features: {
       academics: 0.82,
@@ -132,10 +132,10 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
     workStatus: 'Not working',
     financialNeedLevel: 'Medium',
     awards: ['Community Impact Scholar Nominee'],
-    recommendedAlgorithms: [
-      'Community Impact Reframing',
-      'Consistency & Depth Scoring',
-      'Service Outcome Extractor',
+    recommendedScholarshipIds: [
+      'community-builder',
+      'community-impact-grant',
+      'social-leadership-prize',
     ],
     features: {
       academics: 0.7,
@@ -172,11 +172,11 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
   },
   {
     id: 's3',
-    name: 'Omar Al-Haddad',
-    program: 'Economics & Sociology',
+    name: 'Ibn Al-Khawrizmi',
+    program: 'Algebra',
     year: '1st generation · 4th year',
     tags: ['First-gen', 'Work-study', 'Equity'],
-    gpa: 3.52,
+    gpa: 4.00,
     gpaScale: 4,
     location: 'Ottawa, ON',
     university: 'Carleton University',
@@ -189,10 +189,10 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
     workStatus: 'Part-time',
     financialNeedLevel: 'High',
     awards: ['Access Bursary Recipient'],
-    recommendedAlgorithms: [
-      'Need-Aware Fit Scoring',
-      'Resilience Narrative Optimizer',
-      'Barrier → Action → Impact Structurer',
+    recommendedScholarshipIds: [
+      'first-gen-access',
+      'access-equity-award',
+      'resilience-award',
     ],
     features: {
       academics: 0.75,
