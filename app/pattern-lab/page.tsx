@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import {
@@ -9,8 +9,14 @@ import {
   Network,
   BrainCircuit,
   BarChart3,
-  Filter,
   FlaskConical,
+  GraduationCap,
+  Crown,
+  Users,
+  BadgeDollarSign,
+  Lightbulb,
+  Microscope,
+  ShieldAlert,
 } from 'lucide-react'
 
 import { AnimatedBackground } from '@/components/ui/animated-background'
@@ -28,12 +34,23 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 
+/**
+ * Pan/zoom + force layout
+ * Install:
+ *   pnpm add react-zoom-pan-pinch d3-force
+ */
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
+import {
+  forceCenter,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceCollide,
+} from 'd3-force'
+
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.12 },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.12 } },
 }
 
 const VARIANTS_SECTION = {
@@ -59,22 +76,213 @@ type Dimension = {
   label: string
 }
 
-const DIMENSIONS: Dimension[] = [
-  { id: 'academics', label: 'Academics' },
-  { id: 'leadership', label: 'Leadership' },
-  { id: 'community', label: 'Community Impact' },
-  { id: 'need', label: 'Financial Need' },
-  { id: 'innovation', label: 'Innovation' },
-  { id: 'research', label: 'Research' },
-  { id: 'adversity', label: 'Adversity / Resilience' },
+/* =========================
+   HARD-CODED JSON INPUTS
+   ========================= */
+
+const HEATMAP_INPUTS: {
+  dimensions: Dimension[]
+  scholarshipTypes: ScholarshipType[]
+  matrix: Record<ScholarshipType, Record<DimensionId, number>>
+} = {
+  dimensions: [
+    { id: 'academics', label: 'Academics' },
+    { id: 'leadership', label: 'Leadership' },
+    { id: 'community', label: 'Community Impact' },
+    { id: 'need', label: 'Financial Need' },
+    { id: 'innovation', label: 'Innovation' },
+    { id: 'research', label: 'Research' },
+    { id: 'adversity', label: 'Adversity / Resilience' },
+  ],
+  scholarshipTypes: ['Merit', 'Community', 'STEM', 'Access'],
+  matrix: {
+    Merit: {
+      academics: 0.9,
+      leadership: 0.7,
+      community: 0.3,
+      need: 0.1,
+      innovation: 0.35,
+      research: 0.6,
+      adversity: 0.15,
+    },
+    Community: {
+      academics: 0.3,
+      leadership: 0.75,
+      community: 1.0,
+      need: 0.4,
+      innovation: 0.3,
+      research: 0.15,
+      adversity: 0.55,
+    },
+    STEM: {
+      academics: 0.7,
+      leadership: 0.45,
+      community: 0.25,
+      need: 0.15,
+      innovation: 0.9,
+      research: 0.8,
+      adversity: 0.25,
+    },
+    Access: {
+      academics: 0.45,
+      leadership: 0.3,
+      community: 0.6,
+      need: 1.0,
+      innovation: 0.1,
+      research: 0.1,
+      adversity: 0.9,
+    },
+  },
+}
+
+type Theme = {
+  phrase: string
+  type: ScholarshipType
+  lift: number
+  frequency: number
+}
+
+const NGRAM_INPUTS: Theme[] = [
+  // Merit (6)
+  { phrase: 'research project', type: 'Merit', lift: 2.1, frequency: 0.62 },
+  { phrase: 'dean’s list', type: 'Merit', lift: 1.9, frequency: 0.54 },
+  { phrase: 'capstone thesis', type: 'Merit', lift: 2.3, frequency: 0.48 },
+  { phrase: 'faculty nomination', type: 'Merit', lift: 1.7, frequency: 0.43 },
+  { phrase: 'academic excellence', type: 'Merit', lift: 1.6, frequency: 0.57 },
+  { phrase: 'published paper', type: 'Merit', lift: 2.6, frequency: 0.36 },
+
+  // Community (6)
+  { phrase: 'community clinic', type: 'Community', lift: 2.7, frequency: 0.58 },
+  {
+    phrase: 'grassroots initiative',
+    type: 'Community',
+    lift: 2.3,
+    frequency: 0.51,
+  },
+  { phrase: 'youth mentorship', type: 'Community', lift: 2.0, frequency: 0.47 },
+  { phrase: 'local partners', type: 'Community', lift: 1.8, frequency: 0.42 },
+  {
+    phrase: 'accessibility program',
+    type: 'Community',
+    lift: 2.4,
+    frequency: 0.39,
+  },
+  { phrase: 'served families', type: 'Community', lift: 1.9, frequency: 0.45 },
+
+  // STEM (6)
+  { phrase: 'prototype built', type: 'STEM', lift: 2.8, frequency: 0.67 },
+  {
+    phrase: 'technical challenge',
+    type: 'STEM',
+    lift: 2.2,
+    frequency: 0.49,
+  },
+  { phrase: 'iteration cycle', type: 'STEM', lift: 2.5, frequency: 0.46 },
+  { phrase: 'benchmarked model', type: 'STEM', lift: 2.1, frequency: 0.41 },
+  { phrase: 'experimental setup', type: 'STEM', lift: 2.0, frequency: 0.44 },
+  { phrase: 'validated results', type: 'STEM', lift: 1.8, frequency: 0.38 },
+
+  // Access (6)
+  { phrase: 'first-generation', type: 'Access', lift: 3.3, frequency: 0.71 },
+  {
+    phrase: 'financial barriers',
+    type: 'Access',
+    lift: 2.9,
+    frequency: 0.64,
+  },
+  { phrase: 'worked part-time', type: 'Access', lift: 2.2, frequency: 0.52 },
+  { phrase: 'family obligations', type: 'Access', lift: 2.1, frequency: 0.48 },
+  { phrase: 'systemic obstacles', type: 'Access', lift: 2.6, frequency: 0.46 },
+  { phrase: 'resilience journey', type: 'Access', lift: 2.4, frequency: 0.55 },
 ]
 
-const SCHOLARSHIP_TYPES: ScholarshipType[] = [
-  'Merit',
-  'Community',
-  'STEM',
-  'Access',
+type Correlation = {
+  id: string
+  label: string
+  value: number
+  explanation: string
+}
+
+const CORRELATION_INPUTS: Correlation[] = [
+  {
+    id: 'leadership_community',
+    label: 'Leadership × Community Impact',
+    value: 0.82,
+    explanation:
+      'Scholarships that prioritize leadership often also look for clear, measurable community outcomes.',
+  },
+  {
+    id: 'need_adversity',
+    label: 'Financial Need × Adversity',
+    value: 0.87,
+    explanation:
+      'Need-focused scholarships frequently include language about obstacles or hardship, so these themes tend to appear together.',
+  },
+  {
+    id: 'innovation_research',
+    label: 'Innovation × Research',
+    value: 0.76,
+    explanation:
+      'Innovation is usually backed by evidence of testing, iteration, or research rather than being presented as an isolated idea.',
+  },
+  {
+    id: 'academics_leadership',
+    label: 'Academics × Leadership',
+    value: 0.61,
+    explanation:
+      'Academic awards often still value some leadership, but typically with a lower bar than leadership-first scholarships.',
+  },
 ]
+
+type ExperimentEvent = {
+  time: string
+  label: string
+  effect: string
+}
+
+const EXPERIMENT_LOG: ExperimentEvent[] = [
+  {
+    time: '12:18',
+    label: 'Clustered scholarships into personality groups using embeddings.',
+    effect: 'Improved matching by separating Merit, Community, STEM, and Access styles.',
+  },
+  {
+    time: '12:07',
+    label: 'Ran n-gram analysis on winner essays and prompts for STEM awards.',
+    effect: 'Identified high-signal phrases winners use more often.',
+  },
+  {
+    time: '11:54',
+    label: 'Compared generic drafts with pattern-aware drafts.',
+    effect: 'Raised alignment scores across scholarship types.',
+  },
+  {
+    time: '11:39',
+    label: 'Split “Need” and “Adversity” into distinct dimensions.',
+    effect: 'Made the model more accurate for equity-focused scholarships.',
+  },
+]
+
+const DIMENSION_COLORS: Record<DimensionId, string> = {
+  academics: 'hsl(190 95% 55%)',
+  leadership: 'hsl(280 90% 62%)',
+  community: 'hsl(145 95% 50%)',
+  need: 'hsl(35 95% 55%)',
+  innovation: 'hsl(210 95% 60%)',
+  research: 'hsl(315 90% 60%)',
+  adversity: 'hsl(0 90% 58%)',
+}
+
+const DIMENSION_ICONS: Record<DimensionId, React.ComponentType<{ className?: string }>> =
+  {
+    academics: GraduationCap,
+    leadership: Crown,
+    community: Users,
+    need: BadgeDollarSign,
+    innovation: Lightbulb,
+    research: Microscope,
+    adversity: ShieldAlert,
+  }
 
 function typeLabel(t: ScholarshipType) {
   const map: Record<ScholarshipType, string> = {
@@ -86,208 +294,28 @@ function typeLabel(t: ScholarshipType) {
   return map[t]
 }
 
-/**
- * TYPE_DIMENSION_MATRIX:
- * Heatmap-style matrix of how often each dimension appears
- * in scholarships of a given type (0–1, where 1 is "very frequent").
- */
-const TYPE_DIMENSION_MATRIX: Record<ScholarshipType, Record<DimensionId, number>> = {
-  Merit: {
-    academics: 0.9,
-    leadership: 0.7,
-    community: 0.3,
-    need: 0.1,
-    innovation: 0.35,
-    research: 0.6,
-    adversity: 0.15,
-  },
-  Community: {
-    academics: 0.3,
-    leadership: 0.75,
-    community: 1.0,
-    need: 0.4,
-    innovation: 0.3,
-    research: 0.15,
-    adversity: 0.55,
-  },
-  STEM: {
-    academics: 0.7,
-    leadership: 0.45,
-    community: 0.25,
-    need: 0.15,
-    innovation: 0.9,
-    research: 0.8,
-    adversity: 0.25,
-  },
-  Access: {
-    academics: 0.45,
-    leadership: 0.3,
-    community: 0.6,
-    need: 1.0,
-    innovation: 0.1,
-    research: 0.1,
-    adversity: 0.9,
-  },
+/* Vibrant flame heat color */
+function heatHsl(v: number) {
+  const clamped = Math.max(0, Math.min(1, v))
+  const hue = 210 - clamped * 205
+  const saturation = 100
+  const lightness = 32 + clamped * 30
+  return `hsl(${hue} ${saturation}% ${lightness}%)`
 }
-
-/**
- * THEMES:
- * Top bigrams / phrases per scholarship type with "lift" indicating
- * how much more common they are for that type vs others.
- */
-type Theme = {
-  phrase: string
-  type: ScholarshipType
-  lift: number // >1 means overrepresented
-  frequency: number // relative usage within that type (0–1)
-}
-
-const THEMES: Theme[] = [
-  {
-    phrase: 'research project',
-    type: 'Merit',
-    lift: 2.1,
-    frequency: 0.62,
-  },
-  {
-    phrase: 'dean’s list',
-    type: 'Merit',
-    lift: 1.9,
-    frequency: 0.54,
-  },
-  {
-    phrase: 'community clinic',
-    type: 'Community',
-    lift: 2.7,
-    frequency: 0.58,
-  },
-  {
-    phrase: 'grassroots initiative',
-    type: 'Community',
-    lift: 2.3,
-    frequency: 0.51,
-  },
-  {
-    phrase: 'prototype built',
-    type: 'STEM',
-    lift: 2.8,
-    frequency: 0.67,
-  },
-  {
-    phrase: 'technical challenge',
-    type: 'STEM',
-    lift: 2.2,
-    frequency: 0.49,
-  },
-  {
-    phrase: 'first-generation',
-    type: 'Access',
-    lift: 3.3,
-    frequency: 0.71,
-  },
-  {
-    phrase: 'financial barriers',
-    type: 'Access',
-    lift: 2.9,
-    frequency: 0.64,
-  },
-]
-
-/**
- * CORRELATIONS:
- * Interpretive correlations between dimensions.
- */
-type Correlation = {
-  id: string
-  label: string
-  value: number // 0–1
-  explanation: string
-}
-
-const CORRELATIONS: Correlation[] = [
-  {
-    id: 'leadership_community',
-    label: 'Leadership × Community Impact',
-    value: 0.82,
-    explanation:
-      'Scholarships that emphasize leadership also frequently demand evidence of community-scale outcomes, not just titles.',
-  },
-  {
-    id: 'need_adversity',
-    label: 'Financial Need × Adversity',
-    value: 0.87,
-    explanation:
-      'When financial need is foregrounded, there is almost always language about systemic or personal adversity.',
-  },
-  {
-    id: 'innovation_research',
-    label: 'Innovation × Research',
-    value: 0.76,
-    explanation:
-      'Technical innovation is usually tied to structured research or experimentation rather than standalone “ideas.”',
-  },
-  {
-    id: 'academics_leadership',
-    label: 'Academics × Leadership',
-    value: 0.61,
-    explanation:
-      'High-GPA focused scholarships often still expect some leadership, but with more flexible standards than pure leadership awards.',
-  },
-]
-
-/**
- * EXPERIMENT LOG:
- * Pattern Lab experiment history for demo.
- */
-type ExperimentEvent = {
-  time: string
-  label: string
-  effect: string
-}
-
-const EXPERIMENT_LOG: ExperimentEvent[] = [
-  {
-    time: '12:18',
-    label: 'Clustered 25 scholarships into 4 personality groups using embeddings.',
-    effect: 'Confirmed that “Access / Equity” scholarships form a distinct cluster.',
-  },
-  {
-    time: '12:07',
-    label:
-      'Ran n-gram analysis on winner essays vs prompts for STEM Innovator Award.',
-    effect: 'Surfaced “prototype built” and “iteration cycle” as high-lift phrases.',
-  },
-  {
-    time: '11:54',
-    label: 'Compared generic vs tailored drafts using the personality profiles.',
-    effect:
-      'Average alignment score improved by +12 points across all scholarship types.',
-  },
-  {
-    time: '11:39',
-    label: 'Updated dimension mapping to explicitly separate “Need” and “Adversity”.',
-    effect:
-      'Clarified that not all financial language implies adversity; improved explainability of Access scholarships.',
-  },
-]
 
 export default function PatternLabPage() {
   const [selectedType, setSelectedType] = useState<ScholarshipType>('Merit')
 
+  const DIMENSIONS = HEATMAP_INPUTS.dimensions
+  const SCHOLARSHIP_TYPES = HEATMAP_INPUTS.scholarshipTypes
+  const TYPE_DIMENSION_MATRIX = HEATMAP_INPUTS.matrix
+  const THEMES = NGRAM_INPUTS
+  const CORRELATIONS = CORRELATION_INPUTS
+
   const themesForType = useMemo(
     () => THEMES.filter((t) => t.type === selectedType),
-    [selectedType]
+    [selectedType, THEMES]
   )
-
-  const topDimensionForType = useMemo(() => {
-    const map = TYPE_DIMENSION_MATRIX[selectedType]
-    const entries = Object.entries(map) as [DimensionId, number][]
-    const [id] = entries.reduce(
-      (best, current) => (current[1] > best[1] ? current : best),
-      entries[0]
-    )
-    return DIMENSIONS.find((d) => d.id === id)!
-  }, [selectedType])
 
   return (
     <motion.div
@@ -296,27 +324,26 @@ export default function PatternLabPage() {
       initial="hidden"
       animate="visible"
     >
-
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-zinc-800/70 px-6 py-4">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-              Claude Project · Track 3
+              Pattern Lab
             </p>
             <h1 className="text-lg font-semibold text-zinc-50 md:text-xl">
-              Pattern Lab
+              Scholarship Patterns
             </h1>
             <p className="text-xs text-zinc-500">
-              Cross-scholarship analytics: priority heatmaps, theme mining, and
-              experiment log for judges.
+              Explore what different scholarships value, which phrases winners use,
+              and how dimensions tend to appear together.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-200">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>Claude status: Ready</span>
+              <span>System Status: Ready</span>
             </div>
 
             <Separator orientation="vertical" className="h-6 bg-zinc-700" />
@@ -328,7 +355,10 @@ export default function PatternLabPage() {
                 size="sm"
                 className="h-8 gap-1 rounded-full border-zinc-700 bg-zinc-900/80 text-xs text-zinc-200 hover:bg-zinc-800"
               >
-                <Link href="https://github.com/AsymptoticAstronaut/Claude" target="_blank">
+                <Link
+                  href="https://github.com/AsymptoticAstronaut/Claude"
+                  target="_blank"
+                >
                   <Github className="h-3.5 w-3.5" />
                   <span>View repo</span>
                 </Link>
@@ -349,9 +379,9 @@ export default function PatternLabPage() {
             <motion.section
               variants={VARIANTS_SECTION}
               transition={TRANSITION_SECTION}
-              className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)]"
+              className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
             >
-              {/* Heatmap of priorities across scholarship types */}
+              {/* Heatmap */}
               <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
                 <Spotlight
                   className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
@@ -363,15 +393,15 @@ export default function PatternLabPage() {
                     Priority heatmap by scholarship type
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    Visualizes how often each dimension appears in each scholarship
-                    cluster. This underpins adaptive scoring and drafting.
+                    Each row is a scholarship type. Hotter cells mean that dimension is
+                    more commonly emphasized in that type.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="relative space-y-3 text-xs">
                   <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2">
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-[11px] text-zinc-400">
-                        Selected type in focus
+                        Choose a scholarship type
                       </p>
                       <div className="flex flex-wrap gap-1.5 text-[11px]">
                         {SCHOLARSHIP_TYPES.map((t) => (
@@ -391,10 +421,24 @@ export default function PatternLabPage() {
                       </div>
                     </div>
                     <p className="text-[11px] text-zinc-500">
-                      For demo: you can highlight how the same dimension (e.g.,
-                      Community Impact) is emphasized differently in Merit vs Community
-                      scholarships, which is why your scoring and drafts change.
+                      Use this to understand what a scholarship type usually rewards,
+                      so you can highlight the right parts of your story.
                     </p>
+                  </div>
+
+                  {/* Heat legend */}
+                  <div className="flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px]">
+                    <span className="text-zinc-500">Low</span>
+                    <div className="h-1.5 flex-1 rounded-full bg-zinc-900 overflow-hidden">
+                      <div
+                        className="h-full"
+                        style={{
+                          background:
+                            'linear-gradient(90deg, hsl(210 100% 44%) 0%, hsl(195 100% 52%) 25%, hsl(55 100% 58%) 55%, hsl(20 100% 56%) 75%, hsl(5 100% 52%) 100%)',
+                        }}
+                      />
+                    </div>
+                    <span className="text-zinc-300">High</span>
                   </div>
 
                   <div className="overflow-x-auto rounded-lg border border-zinc-800/80 bg-zinc-950/90">
@@ -431,8 +475,18 @@ export default function PatternLabPage() {
                                   <div className="flex items-center gap-1.5">
                                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-900">
                                       <div
-                                        className="h-full rounded-full bg-gradient-to-r from-sky-500 via-emerald-400 to-emerald-300"
-                                        style={{ width: `${intensity}%`, opacity: 0.4 + 0.6 * value }}
+                                        className="h-full rounded-full"
+                                        style={{
+                                          width: `${intensity}%`,
+                                          backgroundColor: heatHsl(value),
+                                          opacity: 0.42 + 0.58 * value,
+                                          boxShadow:
+                                            value > 0.6
+                                              ? '0 0 8px rgba(255,120,80,0.45)'
+                                              : value > 0.3
+                                              ? '0 0 6px rgba(255,220,120,0.35)'
+                                              : '0 0 5px rgba(90,190,255,0.25)',
+                                        }}
                                       />
                                     </div>
                                     <span className="w-8 text-right text-[10px] text-zinc-500">
@@ -448,15 +502,14 @@ export default function PatternLabPage() {
                     </table>
                   </div>
 
-                  <div className="rounded-lg border border-emerald-500/50 bg-emerald-900/20 px-3 py-2 text-[11px] text-emerald-100">
-                    <p className="mb-1 font-medium text-emerald-100">
-                      Talking point for judges
+                  <div className="rounded-lg border border-sky-500/50 bg-sky-950/20 px-3 py-2 text-[11px] text-sky-100">
+                    <p className="mb-1 font-medium text-sky-100">
+                      What this means for your application
                     </p>
                     <p>
-                      This heatmap is what tells the system that, for example,
-                      Community scholarships demand story-led impact, while Merit ones
-                      demand academic evidence. The drafting engine uses these shapes
-                      when choosing which parts of a student&apos;s story to foreground.
+                      If a type is hot on a dimension, you should put that evidence
+                      early and clearly in your essay. If it’s cooler, mention it only
+                      if it supports your main message.
                     </p>
                   </div>
                 </CardContent>
@@ -465,29 +518,28 @@ export default function PatternLabPage() {
               {/* Theme explorer */}
               <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
                 <Spotlight
-                  className="from-emerald-500/40 via-emerald-400/20 to-emerald-300/10 blur-2xl"
+                  className="from-indigo-500/40 via-sky-400/20 to-cyan-300/10 blur-2xl"
                   size={100}
                 />
                 <CardHeader className="relative pb-3">
                   <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
-                    <Sparkles className="h-4 w-4 text-emerald-300" />
-                    Theme explorer (winners vs prompts)
+                    <Sparkles className="h-4 w-4 text-sky-300" />
+                    Theme explorer
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    N-gram patterns that are overrepresented in winner essays for the
-                    selected scholarship type.
+                    Phrases that appear more often in winning essays for the selected
+                    scholarship type.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="relative space-y-3 text-xs">
                   <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2">
                     <p className="mb-1 flex items-center gap-1 text-[11px] text-zinc-400">
-                      <BrainCircuit className="h-3.5 w-3.5 text-emerald-300" />
-                      <span>Selected cluster: {typeLabel(selectedType)}</span>
+                      <BrainCircuit className="h-3.5 w-3.5 text-sky-300" />
+                      <span>Selected type: {typeLabel(selectedType)}</span>
                     </p>
                     <p className="text-[11px] text-zinc-500">
-                      These phrases appear significantly more often in winners for this
-                      cluster than in the overall dataset. Claude uses them as
-                      stylistic hints, not as hard templates.
+                      These are common “signals” winners tend to include. Use them as
+                      inspiration for framing, not as wording to copy.
                     </p>
                   </div>
 
@@ -511,7 +563,7 @@ export default function PatternLabPage() {
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-900">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-400 to-sky-300"
+                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-400 to-cyan-300"
                               style={{ width: `${theme.frequency * 100}%` }}
                             />
                           </div>
@@ -525,158 +577,42 @@ export default function PatternLabPage() {
 
                   <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
                     <p className="mb-1 font-medium text-zinc-100">
-                      How this feeds drafting
+                      Using themes well
                     </p>
                     <p>
-                      During drafting, Claude is reminded of these high-lift phrases and
-                      patterns, but instructed to keep language authentic and grounded
-                      in the student&apos;s actual experiences. The goal is not to copy
-                      winners, but to mirror what those scholarships consistently reward.
+                      If a phrase matches something you genuinely did, state it
+                      plainly and add specifics (what you built, changed, measured, or
+                      learned). Authentic detail is what makes these themes work.
                     </p>
                   </div>
                 </CardContent>
               </Card>
             </motion.section>
 
-            {/* Row 2: Correlations + experiment log */}
+            {/* Row 2: Correlations + experiment log (60/40) */}
             <motion.section
               variants={VARIANTS_SECTION}
               transition={TRANSITION_SECTION}
-              className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)]"
+              className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]"
             >
-              {/* Correlation map */}
-              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
-                <Spotlight
-                  className="from-zinc-500/40 via-zinc-400/20 to-zinc-300/10 blur-2xl"
-                  size={100}
-                />
-                <CardHeader className="relative pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
-                    <Network className="h-4 w-4 text-zinc-200" />
-                    Dimension correlation map
-                  </CardTitle>
-                  <CardDescription className="text-xs text-zinc-400">
-                    Explains how dimensions co-occur, informing how stories are
-                    combined in essays.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="relative space-y-3 text-xs">
-                  <div className="space-y-1.5">
-                    {CORRELATIONS.map((corr) => (
-                      <div
-                        key={corr.id}
-                        className="rounded-lg bg-zinc-950/90 px-3 py-2"
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <p className="text-[12px] font-medium text-zinc-100">
-                            {corr.label}
-                          </p>
-                          <span className="text-[11px] text-zinc-400">
-                            r ≈ {corr.value.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="mb-1 flex items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-900">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-400 to-sky-300"
-                              style={{ width: `${corr.value * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-zinc-400">
-                          {corr.explanation}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
-                    <p className="mb-1 font-medium text-zinc-100">
-                      Example use in drafting
-                    </p>
-                    <p>
-                      If a scholarship is high on both Need and Adversity, Claude is
-                      nudged to weave those themes into a single coherent story, rather
-                      than treating them as two unrelated paragraphs.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Comparative view: generic vs tailored at the pattern level */}
-              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
-                <Spotlight
-                  className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
-                  size={90}
-                />
-                <CardHeader className="relative pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
-                    <Filter className="h-4 w-4 text-sky-300" />
-                    Pattern-level comparison: generic vs tailored
-                  </CardTitle>
-                  <CardDescription className="text-xs text-zinc-400">
-                    Shows how pattern-aware drafting shifts the emphasis of the same
-                    student story.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="relative space-y-3 text-xs">
-                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2">
-                    <p className="mb-1 text-[11px] font-medium text-zinc-100">
-                      Example: Robotics story
-                    </p>
-                    <p className="text-[11px] text-zinc-400">
-                      You can use this card in the demo to narrate how the same robotics
-                      project gets reframed for:
-                    </p>
-                    <ul className="mt-1 list-disc pl-4 text-[11px] text-zinc-400">
-                      <li>Merit: academic rigor and awards</li>
-                      <li>Community: outreach workshops and impact</li>
-                      <li>STEM: technical experimentation and prototypes</li>
-                      <li>Access: overcoming financial/adversity constraints</li>
-                    </ul>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <PatternComparisonCard
-                      variant="generic"
-                      title="Generic essay"
-                      bulletOne="Mentions robotics club, GPA, and volunteer work in a single list."
-                      bulletTwo="Does not clearly tie achievements to what the scholarship values."
-                    />
-                    <PatternComparisonCard
-                      variant="tailored"
-                      title="Pattern-aware draft"
-                      bulletOne="Opens with the robotics story framed through the cluster’s top dimensions."
-                      bulletTwo="Uses mined phrases and correlations as soft constraints for structure and emphasis."
-                    />
-                  </div>
-
-                  <div className="rounded-lg border border-emerald-500/50 bg-emerald-900/20 px-3 py-2 text-[11px] text-emerald-100">
-                    <p className="mb-1 font-medium text-emerald-100">
-                      Judge-facing takeaway
-                    </p>
-                    <p>
-                      Pattern Lab is the “research notebook” behind your product. It
-                      demonstrates that the system is discovering real structure in the
-                      scholarship space, not just matching keywords.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <ForceCorrelationCard
+                dimensions={DIMENSIONS}
+                correlations={CORRELATIONS}
+              />
 
               {/* Experiment log */}
               <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
                 <Spotlight
                   className="from-emerald-500/40 via-emerald-400/20 to-emerald-300/10 blur-2xl"
-                  size={80}
+                  size={90}
                 />
                 <CardHeader className="relative pb-3">
                   <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
                     <FlaskConical className="h-4 w-4 text-emerald-300" />
-                    Pattern Lab experiment log
+                    Analysis log
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    Narrative of the experiments you ran while building the system.
+                    A short history of the steps used to learn these patterns.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="relative space-y-3 text-xs">
@@ -692,7 +628,7 @@ export default function PatternLabPage() {
                         <div className="flex-1 rounded-lg bg-zinc-950/90 px-3 py-2">
                           <p className="text-[11px] text-zinc-200">{event.label}</p>
                           <p className="mt-1 text-[11px] text-zinc-500">
-                            Effect: {event.effect}
+                            Result: {event.effect}
                           </p>
                         </div>
                       </li>
@@ -701,12 +637,12 @@ export default function PatternLabPage() {
 
                   <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
                     <p className="mb-1 font-medium text-zinc-100">
-                      How to use this in the pitch
+                      Why this matters
                     </p>
                     <p>
-                      This timeline is where you can briefly talk about methodology:
-                      embeddings, clustering, n-gram analysis, and how each step improved
-                      alignment and explainability.
+                      The patterns you see above come from real scholarship data, not
+                      guesses. The system updates these signals as more scholarships
+                      and winner essays are added.
                     </p>
                   </div>
                 </CardContent>
@@ -719,37 +655,427 @@ export default function PatternLabPage() {
   )
 }
 
-function PatternComparisonCard({
-  variant,
-  title,
-  bulletOne,
-  bulletTwo,
+/* =========================
+   INTERPRETABLE FORCE MAP
+   ========================= */
+
+type ForceNode = Dimension & {
+  x: number
+  y: number
+  vx?: number
+  vy?: number
+}
+
+type ForceLink = {
+  id: string
+  label: string
+  value: number
+  explanation: string
+  source: DimensionId
+  target: DimensionId
+  isExplicit: boolean
+}
+
+function ForceCorrelationCard({
+  dimensions,
+  correlations,
 }: {
-  variant: 'generic' | 'tailored'
-  title: string
-  bulletOne: string
-  bulletTwo: string
+  dimensions: Dimension[]
+  correlations: Correlation[]
 }) {
-  const isTailored = variant === 'tailored'
+  const [active, setActive] = useState<Correlation | null>(null)
+  const [nodes, setNodes] = useState<ForceNode[]>([])
+  const [links, setLinks] = useState<ForceLink[]>([])
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  const WIDTH = 620
+  const HEIGHT = 420
+  const PADDING = 48
+  const center = { x: WIDTH / 2, y: HEIGHT / 2 }
+
+  useEffect(() => {
+    const BASE_SIM = 0.18
+
+    const sim: Record<string, number> = {}
+    dimensions.forEach((a) => {
+      dimensions.forEach((b) => {
+        if (a.id === b.id) return
+        const k = a.id < b.id ? `${a.id}_${b.id}` : `${b.id}_${a.id}`
+        sim[k] = BASE_SIM
+      })
+    })
+    correlations.forEach((c) => {
+      const [a, b] = c.id.split('_') as DimensionId[]
+      const k = a < b ? `${a}_${b}` : `${b}_${a}`
+      sim[k] = c.value
+    })
+
+    const initNodes: ForceNode[] = dimensions.map((d, i) => {
+      const angle = (2 * Math.PI * i) / dimensions.length
+      const r = 85
+      return {
+        ...d,
+        x: center.x + r * Math.cos(angle) + (Math.random() - 0.5) * 10,
+        y: center.y + r * Math.sin(angle) + (Math.random() - 0.5) * 10,
+      }
+    })
+
+    const allLinks: ForceLink[] = []
+    for (let i = 0; i < dimensions.length; i++) {
+      for (let j = i + 1; j < dimensions.length; j++) {
+        const a = dimensions[i].id
+        const b = dimensions[j].id
+        const k = a < b ? `${a}_${b}` : `${b}_${a}`
+        const explicit = correlations.find((c) => {
+          const [x, y] = c.id.split('_')
+          return (x === a && y === b) || (x === b && y === a)
+        })
+        allLinks.push({
+          id: k,
+          label:
+            explicit?.label ??
+            `${dimensions[i].label} × ${dimensions[j].label}`,
+          value: sim[k],
+          explanation: explicit?.explanation ?? '',
+          source: a,
+          target: b,
+          isExplicit: Boolean(explicit),
+        })
+      }
+    }
+
+    const simForce = forceSimulation(initNodes as any)
+      .force(
+        'link',
+        forceLink(allLinks as any)
+          .id((d: any) => d.id)
+          .distance((l: any) => {
+            const v = Math.max(0.05, Math.min(1, l.value ?? BASE_SIM))
+            const minDist = 55
+            const maxDist = 175
+            return maxDist - v * (maxDist - minDist)
+          })
+          .strength((l: any) => (l.isExplicit ? 1.0 : 0.1))
+      )
+      .force('charge', forceManyBody().strength(-175))
+      .force('collide', forceCollide(26))
+      .force('center', forceCenter(center.x, center.y))
+
+    for (let i = 0; i < 260; i++) simForce.tick()
+    simForce.stop()
+
+    setNodes([...initNodes])
+    setLinks([...allLinks])
+
+    return () => simForce.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimensions, correlations])
+
+  const gridLines = useMemo(() => {
+    const step = 70
+    const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = []
+    for (let x = PADDING; x <= WIDTH - PADDING; x += step) {
+      lines.push({ x1: x, y1: PADDING, x2: x, y2: HEIGHT - PADDING })
+    }
+    for (let y = PADDING; y <= HEIGHT - PADDING; y += step) {
+      lines.push({ x1: PADDING, y1: y, x2: WIDTH - PADDING, y2: y })
+    }
+    return lines
+  }, [WIDTH, HEIGHT, PADDING])
+
+  const explicitLinks = links.filter((l) => l.isExplicit)
+
   return (
-    <div
-      className={`rounded-lg border px-3 py-2 ${
-        isTailored
-          ? 'border-emerald-500/60 bg-emerald-950/20'
-          : 'border-zinc-800/80 bg-zinc-950/90'
-      }`}
-    >
-      <p
-        className={`mb-1 text-[12px] font-medium ${
-          isTailored ? 'text-emerald-100' : 'text-zinc-100'
-        }`}
-      >
-        {title}
-      </p>
-      <ul className="list-disc pl-4 text-[11px] text-zinc-400">
-        <li>{bulletOne}</li>
-        <li>{bulletTwo}</li>
-      </ul>
-    </div>
+    <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+      <Spotlight
+        className="from-zinc-500/35 via-zinc-400/15 to-zinc-300/10 blur-2xl"
+        size={120}
+      />
+      <CardHeader className="relative pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
+          <Network className="h-4 w-4 text-zinc-200" />
+          Dimension correlation map
+        </CardTitle>
+        <CardDescription className="text-xs text-zinc-400">
+          An interactive map showing which dimensions tend to show up together across
+          scholarships. Stronger correlations pull dimensions closer.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="relative space-y-3 text-xs">
+        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-400">Node color/icon:</span>
+              <span className="text-zinc-200">dimension</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-400">Line color/thickness:</span>
+              <span className="text-zinc-200">correlation strength r</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-400">Line length:</span>
+              <span className="text-zinc-200">shorter means stronger</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
+          <div
+            ref={containerRef}
+            className="relative rounded-lg border border-zinc-800/80 bg-zinc-950/90 p-2"
+          >
+            <div className="pointer-events-none absolute inset-0 opacity-45">
+              <div className="absolute -left-12 top-8 h-52 w-52 rounded-full bg-sky-500/20 blur-3xl" />
+              <div className="absolute right-0 top-10 h-60 w-60 rounded-full bg-fuchsia-500/20 blur-3xl" />
+              <div className="absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
+              <div className="absolute bottom-8 right-20 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
+            </div>
+
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.7}
+              maxScale={3}
+              centerOnInit
+              wheel={{ step: 0.12 }}
+              panning={{ velocityDisabled: true }}
+              doubleClick={{ disabled: true }}
+            >
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => zoomIn()}
+                      className="rounded-md border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-[10px] text-zinc-200 hover:bg-zinc-900"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => zoomOut()}
+                      className="rounded-md border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-[10px] text-zinc-200 hover:bg-zinc-900"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => resetTransform()}
+                      className="rounded-md border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-[10px] text-zinc-200 hover:bg-zinc-900"
+                    >
+                      reset
+                    </button>
+                  </div>
+
+                  <TransformComponent wrapperClass="w-full" contentClass="w-full">
+                    <svg
+                      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+                      className="h-[360px] w-full"
+                      role="img"
+                      aria-label="Correlation similarity map"
+                    >
+                      {gridLines.map((g, i) => (
+                        <line
+                          key={i}
+                          x1={g.x1}
+                          y1={g.y1}
+                          x2={g.x2}
+                          y2={g.y2}
+                          stroke="rgba(255,255,255,0.04)"
+                          strokeWidth="1"
+                        />
+                      ))}
+
+                      <line
+                        x1={PADDING}
+                        y1={center.y}
+                        x2={WIDTH - PADDING}
+                        y2={center.y}
+                        stroke="rgba(255,255,255,0.11)"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1={center.x}
+                        y1={PADDING}
+                        x2={center.x}
+                        y2={HEIGHT - PADDING}
+                        stroke="rgba(255,255,255,0.11)"
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={WIDTH - PADDING}
+                        y={center.y - 10}
+                        textAnchor="end"
+                        fontSize="16"
+                        fill="rgba(228,228,231,0.9)"
+                      >
+                        Similarity X
+                      </text>
+                      <text
+                        x={center.x + 8}
+                        y={PADDING + 14}
+                        textAnchor="start"
+                        fontSize="16"
+                        fill="rgba(228,228,231,0.9)"
+                      >
+                        Similarity Y
+                      </text>
+
+                      {explicitLinks.map((l) => {
+                        const a = nodes.find((n) => n.id === l.source)
+                        const b = nodes.find((n) => n.id === l.target)
+                        if (!a || !b) return null
+                        const w = 2.1 + l.value * 6.0
+                        const midX = (a.x + b.x) / 2
+                        const midY = (a.y + b.y) / 2
+                        return (
+                          <g key={l.id}>
+                            <line
+                              x1={a.x}
+                              y1={a.y}
+                              x2={b.x}
+                              y2={b.y}
+                              stroke={heatHsl(l.value)}
+                              strokeWidth={w}
+                              strokeLinecap="round"
+                              opacity={0.6}
+                              onMouseEnter={() => setActive(l)}
+                              onMouseLeave={() => setActive(null)}
+                            />
+                            <g opacity={0.7}>
+                              <rect
+                                x={midX - 18}
+                                y={midY - 11}
+                                width={36}
+                                height={20}
+                                rx={5}
+                                fill="rgba(9,9,11,0.92)"
+                                stroke="rgba(255,255,255,0.18)"
+                              />
+                              <text
+                                x={midX}
+                                y={midY + 6}
+                                textAnchor="middle"
+                                fontSize="14"
+                                fill="rgba(244,244,245,0.98)"
+                              >
+                                {l.value.toFixed(2)}
+                              </text>
+                            </g>
+                          </g>
+                        )
+                      })}
+
+                      {nodes.map((n) => {
+                        const c = DIMENSION_COLORS[n.id]
+                        const Icon = DIMENSION_ICONS[n.id]
+                        return (
+                          <g key={n.id}>
+                            <circle cx={n.x} cy={n.y} r="24" fill={c} opacity="0.14" />
+                            <circle
+                              cx={n.x}
+                              cy={n.y}
+                              r="17"
+                              fill="rgba(9,9,11,0.96)"
+                              stroke={c}
+                              strokeWidth="2.5"
+                            />
+                            <circle cx={n.x} cy={n.y} r="7" fill={c} opacity="0.8" />
+                            <foreignObject
+                              x={n.x - 6}
+                              y={n.y - 6}
+                              width={12}
+                              height={12}
+                            >
+                              <Icon className="h-3 w-3 text-white/90" />
+                            </foreignObject>
+                            <text
+                              x={n.x}
+                              y={n.y - 28}
+                              textAnchor="middle"
+                              fontSize="17.5"
+                              fontWeight="600"
+                              fill="rgba(244,244,245,0.98)"
+                            >
+                              {n.label}
+                            </text>
+                          </g>
+                        )
+                      })}
+                    </svg>
+                  </TransformComponent>
+                </>
+              )}
+            </TransformWrapper>
+
+            {active && (
+              <div className="pointer-events-none absolute left-2 top-2 z-20 rounded-lg border border-zinc-700/80 bg-zinc-950/95 px-3 py-2 text-[16px]">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: heatHsl(active.value) }}
+                  />
+                  <p className="font-medium text-zinc-100">{active.label}</p>
+                </div>
+                <p className="mt-0.5 text-zinc-400">r ≈ {active.value.toFixed(2)}</p>
+                <p className="mt-1 text-zinc-500">{active.explanation}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 p-3">
+            <p className="mb-2 text-[11px] font-medium text-zinc-200">
+              Strongest pairs in the dataset
+            </p>
+            <ul className="space-y-2">
+              {correlations
+                .slice()
+                .sort((a, b) => b.value - a.value)
+                .map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-md border border-zinc-800/70 bg-zinc-950/70 px-2.5 py-2"
+                    onMouseEnter={() => setActive(c)}
+                    onMouseLeave={() => setActive(null)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: heatHsl(c.value) }}
+                        />
+                        <p className="text-[11px] font-medium text-zinc-100">
+                          {c.label}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-zinc-400">
+                        r≈{c.value.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-zinc-500">
+                      {c.explanation}
+                    </p>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
+          <p className="mb-1 font-medium text-zinc-100">How to read this map</p>
+          <ul className="list-disc pl-4 space-y-1">
+            <li>Each node is a scholarship dimension.</li>
+            <li>
+              Visible lines show measured correlations. Hotter and thicker lines mean
+              stronger relationships.
+            </li>
+            <li>
+              Dimensions connected by strong lines sit closer together because the
+              layout uses correlation strength as attraction.
+            </li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
