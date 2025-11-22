@@ -1,9 +1,17 @@
-Meeting Link: https://meet.google.com/mso-srqw-cnx or lets just facetime 
+UPDATES:
+Nov 19:
+- can now add scholarships
+- ability to store json format for profiles/scholarships: https://claude-kappa-ten.vercel.app/json-demo
+- please see /lib/stores/scholarships-store.ts and /lib/stores/student-profiles-store.ts you can change the interfaces as u wish, (it will break the UI for scholarship/profiles but I will fix it once we finalize the protocol)
+- you can see how to get the json string from /app/json-demo/page.tsx, i left u an example
+- added data like scholarships can now persist and data are managed by Zustand, stored locally
+
+
 Todo Priority List:
 1) Create UI concept DONE
-2) Decide what each page looks like/what ideas we include and exclude (must finalize this today)
-3) Design how to integrate Claude
-4) integrate Claude
+2) Decide what each page looks like/what ideas we include and exclude (must finalize this today) DONE
+3) Design how to integrate Claude In progress
+4) integrate Claude in progress
 5) create slide deck
 
 Schedule:
