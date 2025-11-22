@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import {
@@ -10,6 +10,7 @@ import {
   History,
   Settings2,
   BookOpenCheck,
+  Loader2,
 } from 'lucide-react'
 
 import { AnimatedBackground } from '@/components/ui/animated-background'
@@ -28,6 +29,11 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import { useScholarshipStore } from '@/lib/stores/scholarships-store'
+import {
+  useStudentProfileStore,
+  type StudentProfile,
+} from '@/lib/stores/student-profiles-store'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
@@ -70,14 +76,15 @@ const DIMENSIONS: Dimension[] = [
 
 type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
 
-type Scholarship = {
+type ScholarshipOption = {
   id: string
   name: string
   type: ScholarshipType
   priorities: DimensionId[]
+  weights?: Record<DimensionId, number>
 }
 
-const SCHOLARSHIPS: Scholarship[] = [
+const FALLBACK_SCHOLARSHIPS: ScholarshipOption[] = [
   {
     id: 'sch1',
     name: 'Merit Excellence Grant',
@@ -123,6 +130,66 @@ const TAILORED_DRAFTS: Record<string, string> = {
     'As a first-generation student from a low-income household, every semester has required careful trade-offs between work, school, and family responsibilities. When our school’s computer lab started failing, I saw how easily those trade-offs could push students like me out of opportunities: classmates who relied on the lab were suddenly missing assignments and losing confidence. I understood that feeling intimately, because I had also been counting on those machines to complete my own coursework.\n\nInstead of letting the problem quietly shrink our options, I took on extra shifts at my part-time job to fund inexpensive replacement parts and organized repair sessions with a few classmates. We restored enough machines to keep the lab usable after hours, and I set aside specific evenings to help younger students with homework before going home to support my own family. This scholarship would reduce the financial pressure that forces me to choose between work and school, and it would allow me to continue building small, practical interventions that keep first-generation students from slipping through the cracks.',
 }
 
+const AUTHENTICITY_CONSTRAINTS = [
+  'Do not invent new experiences or awards.',
+  'Preserve anchor sentences from the base story.',
+  'Avoid over-polished or unnatural phrasing.',
+]
+
+const DIMENSION_IDS: DimensionId[] = [
+  'academics',
+  'leadership',
+  'community',
+  'need',
+  'innovation',
+  'research',
+  'adversity',
+]
+
+function buildWeights(
+  weights: Record<DimensionId, number> | undefined,
+  priorities: DimensionId[]
+): Record<DimensionId, number> {
+  if (weights) {
+    return weights
+  }
+  const base: Record<DimensionId, number> = DIMENSION_IDS.reduce(
+    (acc, id) => ({ ...acc, [id]: 0.05 }),
+    {} as Record<DimensionId, number>
+  )
+  priorities.forEach((dimension, index) => {
+    const emphasis = Math.max(0.22 - index * 0.04, 0.08)
+    base[dimension] = Math.max(base[dimension], emphasis)
+  })
+  return base
+}
+
+function computeCompatibilityScore(
+  student: StudentProfile | undefined,
+  scholarship: ScholarshipOption
+) {
+  if (!student) {
+    return 0
+  }
+  const weights = buildWeights(scholarship.weights, scholarship.priorities)
+  return DIMENSION_IDS.reduce((score, dimension) => {
+    const feature = student.features?.[dimension] ?? 0
+    return score + feature * (weights[dimension] ?? 0)
+  }, 0)
+}
+
+function buildStudentStorySummary(student: StudentProfile | undefined) {
+  if (!student) {
+    return ''
+  }
+  const signature = `${student.name} — ${student.program} (${student.year})`
+  const stories =
+    student.stories
+      ?.map((story) => `${story.title}: ${story.summary}`)
+      .filter(Boolean) ?? []
+  return [signature, ...stories].join('\n\n')
+}
+
 function typeBadge(type: ScholarshipType) {
   const map: Record<ScholarshipType, string> = {
     Merit: 'Merit',
@@ -135,19 +202,95 @@ function typeBadge(type: ScholarshipType) {
 
 export default function DraftStudioPage() {
   const [baseStory, setBaseStory] = useState(BASE_STORY_DEFAULT)
-  const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>(
-    SCHOLARSHIPS[0]?.id ?? ''
-  )
   const [focus, setFocus] = useState<DraftFocus>('balanced')
   const [wordLimit, setWordLimit] = useState('650')
+  const scholarshipsData = useScholarshipStore((s) => s.scholarships)
+  const studentProfiles = useStudentProfileStore((s) => s.profiles)
+  const scholarshipOptions = useMemo<ScholarshipOption[]>(
+    () =>
+      scholarshipsData.length
+        ? scholarshipsData.map((sch) => ({
+            id: sch.id,
+            name: sch.name,
+            type: sch.type,
+            priorities: sch.priorities,
+            weights: sch.weights,
+          }))
+        : FALLBACK_SCHOLARSHIPS,
+    [scholarshipsData]
+  )
+  const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>(
+    scholarshipOptions[0]?.id ?? FALLBACK_SCHOLARSHIPS[0]?.id ?? ''
+  )
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(
+    studentProfiles[0]?.id ?? ''
+  )
+  const [generatedDrafts, setGeneratedDrafts] = useState<Record<string, string>>({})
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (scholarshipOptions.length === 0) {
+      return
+    }
+    if (!selectedScholarshipId) {
+      setSelectedScholarshipId(scholarshipOptions[0].id)
+      return
+    }
+    if (!scholarshipOptions.some((sch) => sch.id === selectedScholarshipId)) {
+      setSelectedScholarshipId(scholarshipOptions[0].id)
+    }
+  }, [scholarshipOptions, selectedScholarshipId])
+
+  useEffect(() => {
+    if (!studentProfiles.length) {
+      return
+    }
+    if (!selectedProfileId) {
+      setSelectedProfileId(studentProfiles[0].id)
+      return
+    }
+    if (!studentProfiles.some((profile) => profile.id === selectedProfileId)) {
+      setSelectedProfileId(studentProfiles[0].id)
+    }
+  }, [selectedProfileId, studentProfiles])
 
   const selectedScholarship =
     useMemo(
-      () => SCHOLARSHIPS.find((s) => s.id === selectedScholarshipId) ?? SCHOLARSHIPS[0],
-      [selectedScholarshipId]
-    )
+      () =>
+        scholarshipOptions.find((s) => s.id === selectedScholarshipId) ??
+        scholarshipOptions[0],
+      [scholarshipOptions, selectedScholarshipId]
+    ) ?? FALLBACK_SCHOLARSHIPS[0]
 
-  const tailoredDraft = TAILORED_DRAFTS[selectedScholarship.id]
+  const selectedStudent =
+    useMemo(
+      () =>
+        studentProfiles.find((profile) => profile.id === selectedProfileId) ??
+        studentProfiles[0],
+      [selectedProfileId, studentProfiles]
+    ) ?? null
+
+  const recommendedScholarships = useMemo(
+    () =>
+      selectedStudent
+        ? scholarshipOptions
+            .map((sch) => ({
+              ...sch,
+              compatibility: computeCompatibilityScore(selectedStudent, sch),
+            }))
+            .sort((a, b) => b.compatibility - a.compatibility)
+            .slice(0, 3)
+        : [],
+    [scholarshipOptions, selectedStudent]
+  )
+
+  const tailoredDraft =
+    selectedScholarship?.id && TAILORED_DRAFTS[selectedScholarship.id]
+      ? TAILORED_DRAFTS[selectedScholarship.id]
+      : GENERIC_DRAFT
+  const liveDraft = generatedDrafts[selectedScholarship.id]
+  const displayedDraft = liveDraft ?? tailoredDraft
 
   const priorities = useMemo(
     () =>
@@ -156,6 +299,72 @@ export default function DraftStudioPage() {
         .filter(Boolean),
     [selectedScholarship]
   )
+
+  const handleSyncBaseStory = () => {
+    if (!selectedStudent) {
+      return
+    }
+    const summary = buildStudentStorySummary(selectedStudent)
+    if (summary) {
+      setBaseStory(summary)
+    }
+  }
+
+  const handleGenerateDraft = async () => {
+    if (!baseStory.trim()) {
+      setGenerationError('Enter or paste a base story before generating a draft.')
+      return
+    }
+
+    const scholarshipId = selectedScholarship.id
+    const parsedWordLimit = Number.parseInt(wordLimit, 10)
+
+    setIsGenerating(true)
+    setGenerationError(null)
+
+    try {
+      const response = await fetch('/api/generate-draft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseStory,
+          scholarship: selectedScholarship,
+          focus,
+          wordLimit: Number.isFinite(parsedWordLimit) ? parsedWordLimit : undefined,
+          constraints: AUTHENTICITY_CONSTRAINTS,
+          scholarships: scholarshipsData,
+          studentProfiles,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}))
+        throw new Error(
+          errorPayload?.error ?? 'Claude could not generate a draft. Try again.'
+        )
+      }
+
+      const payload = await response.json()
+      if (!payload?.draft) {
+        throw new Error('Claude returned an empty draft.')
+      }
+
+      setGeneratedDrafts((prev) => ({
+        ...prev,
+        [scholarshipId]: payload.draft as string,
+      }))
+    } catch (error) {
+      setGenerationError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while generating the draft.'
+      )
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   return (
     <motion.div
@@ -212,6 +421,211 @@ export default function DraftStudioPage() {
             initial="hidden"
             animate="visible"
           >
+            {/* Row 0: Student focus + recommended scholarships */}
+            <motion.section
+              variants={VARIANTS_SECTION}
+              transition={TRANSITION_SECTION}
+              className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+            >
+              {/* Student focus */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-emerald-500/30 via-emerald-400/15 to-emerald-300/10 blur-2xl"
+                  size={110}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
+                    <BookOpenCheck className="h-4 w-4 text-emerald-300" />
+                    Select student focus
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Choose whose story Claude is refining, then sync their highlights into
+                    the base narrative.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-4 text-xs">
+                  {studentProfiles.length === 0 ? (
+                    <p className="text-[11px] text-zinc-400">
+                      Add a student profile first to unlock drafting controls.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-1.5 sm:grid-cols-2">
+                        {studentProfiles.map((student) => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onClick={() => setSelectedProfileId(student.id)}
+                            className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                              student.id === selectedProfileId
+                                ? 'border-emerald-500/70 bg-emerald-500/10'
+                                : 'border-zinc-800/80 bg-zinc-950/70 hover:border-zinc-700'
+                            }`}
+                          >
+                            <p className="text-[12px] font-medium text-zinc-100">
+                              {student.name}
+                            </p>
+                            <p className="text-[10px] text-zinc-500">
+                              {student.program} • {student.year}
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {student.tags.slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full border border-zinc-800/70 px-1.5 py-0.5 text-[9px] text-zinc-400"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {selectedStudent && (
+                        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-[11px] font-medium text-emerald-100">
+                                Focused student
+                              </p>
+                              <p className="text-[11px] text-emerald-100/80">
+                                {selectedStudent.name} — {selectedStudent.program}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-full border-emerald-400/60 bg-emerald-500/10 text-[11px] text-emerald-100"
+                              onClick={handleSyncBaseStory}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              Sync story
+                            </Button>
+                          </div>
+                          <div className="mt-2 grid gap-2 text-[10px] text-emerald-100/80 md:grid-cols-3">
+                            <div>
+                              <p className="text-[9px] uppercase tracking-wide text-emerald-300/70">
+                                Drafts generated
+                              </p>
+                              <p className="text-[11px] font-semibold">
+                                {selectedStudent.stats.draftsGenerated}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase tracking-wide text-emerald-300/70">
+                                Matched scholarships
+                              </p>
+                              <p className="text-[11px] font-semibold">
+                                {selectedStudent.stats.scholarshipsMatched}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase tracking-wide text-emerald-300/70">
+                                Avg alignment
+                              </p>
+                              <p className="text-[11px] font-semibold">
+                                {selectedStudent.stats.avgAlignment}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recommended scholarships */}
+              <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                <Spotlight
+                  className="from-sky-500/40 via-sky-400/20 to-sky-300/10 blur-2xl"
+                  size={90}
+                />
+                <CardHeader className="relative pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm text-zinc-50">
+                    <Sparkles className="h-4 w-4 text-sky-300" />
+                    Recommended scholarships
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-400">
+                    Claude scores each scholarship using this student’s feature profile and
+                    surfaces the strongest fit.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative space-y-3 text-xs">
+                  {selectedStudent ? (
+                    recommendedScholarships.length ? (
+                      <div className="space-y-2">
+                        {recommendedScholarships.map((sch, index) => (
+                          <button
+                            key={sch.id}
+                            type="button"
+                            onClick={() => setSelectedScholarshipId(sch.id)}
+                            className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                              sch.id === selectedScholarshipId
+                                ? 'border-sky-500/60 bg-sky-500/10'
+                                : 'border-zinc-800/80 bg-zinc-950/70 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[11px] font-medium text-zinc-100">
+                                  {sch.name}
+                                </p>
+                                <p className="text-[10px] text-zinc-500">
+                                  {typeBadge(sch.type)} •{' '}
+                                  {sch.priorities
+                                    .map(
+                                      (pid) =>
+                                        DIMENSIONS.find((d) => d.id === pid)?.label ?? ''
+                                    )
+                                    .join(', ')}
+                                </p>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={`px-1.5 py-0.5 text-[10px] ${
+                                  index === 0
+                                    ? 'border-emerald-500/60 text-emerald-200'
+                                    : 'border-zinc-700 text-zinc-200'
+                                }`}
+                              >
+                                {index === 0 ? 'Top match' : 'Good fit'}
+                              </Badge>
+                            </div>
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                <span>Compatibility</span>
+                                <span className="font-semibold text-zinc-200">
+                                  {Math.round(sch.compatibility * 100)} / 100
+                                </span>
+                              </div>
+                              <div className="mt-1 h-1.5 rounded-full bg-zinc-900/80">
+                                <div
+                                  className="h-full rounded-full bg-sky-500"
+                                  style={{ width: `${Math.min(sch.compatibility * 100, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-zinc-400">
+                        No recommendations available yet—add more scholarships to your
+                        workspace.
+                      </p>
+                    )
+                  ) : (
+                    <p className="text-[11px] text-zinc-400">
+                      Select a student profile to see tailored recommendations.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.section>
+
             {/* Row 1: Base story + target scholarship context */}
             <motion.section
               variants={VARIANTS_SECTION}
@@ -245,6 +659,8 @@ export default function DraftStudioPage() {
                         variant="outline"
                         size="sm"
                         className="h-7 gap-1 rounded-full border-zinc-700 bg-zinc-900/80 text-[11px] text-zinc-200 hover:bg-zinc-800"
+                        onClick={handleSyncBaseStory}
+                        disabled={!selectedStudent}
                       >
                         <Sparkles className="h-3 w-3" />
                         Sync from Profiles
@@ -325,7 +741,7 @@ export default function DraftStudioPage() {
                       Scholarship to draft for
                     </label>
                     <div className="grid gap-1.5">
-                      {SCHOLARSHIPS.map((sch) => (
+                      {scholarshipOptions.map((sch) => (
                         <button
                           key={sch.id}
                           type="button"
@@ -474,6 +890,14 @@ export default function DraftStudioPage() {
                       >
                         AI-assisted
                       </Badge>
+                      {liveDraft && (
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/60 bg-emerald-900/20 px-2 py-0.5 text-[10px] text-emerald-200"
+                        >
+                          Live Claude draft
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-[10px] text-emerald-300">
                       Alignment to {selectedScholarship.name}:{' '}
@@ -481,8 +905,40 @@ export default function DraftStudioPage() {
                     </span>
                   </div>
 
+                  <div className="flex flex-col gap-2 rounded-lg border border-zinc-800/60 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-400 md:flex-row md:items-center md:justify-between">
+                    <p className="text-[10px] text-zinc-500">
+                      Sends the local scholarships + student profiles JSON to Claude for a
+                      focused draft.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 rounded-full bg-sky-600/80 px-3 text-[11px] font-medium text-white hover:bg-sky-500/80"
+                      onClick={handleGenerateDraft}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Generating…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3 text-sky-200" />
+                          Generate draft
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {generationError && (
+                    <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
+                      {generationError}
+                    </div>
+                  )}
+
                   <div className="rounded-lg border border-sky-700/70 bg-zinc-950/90 px-3 py-2 text-[11px] leading-relaxed text-zinc-200">
-                    {tailoredDraft}
+                    {displayedDraft}
                   </div>
 
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -587,9 +1043,9 @@ export default function DraftStudioPage() {
                         Authenticity & constraints
                       </label>
                       <div className="space-y-1.5">
-                        <CheckboxRow label="Do not invent new experiences or awards." />
-                        <CheckboxRow label="Preserve anchor sentences from the base story." />
-                        <CheckboxRow label="Avoid over-polished or unnatural phrasing." />
+                        {AUTHENTICITY_CONSTRAINTS.map((label) => (
+                          <CheckboxRow key={label} label={label} />
+                        ))}
                       </div>
                     </div>
                   </div>
