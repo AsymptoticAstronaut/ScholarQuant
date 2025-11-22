@@ -402,19 +402,20 @@ export default function StudentProfilesPage() {
                       <span className="text-zinc-500">
                         Your base story is saved privately to this profile.
                       </span>
-                      <Button
-                        size="sm"
-                        variant={baseStoryDirty ? 'default' : 'outline'}
-                        className={`h-7 rounded-full px-3 text-[11px] ${
-                          baseStoryDirty
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                            : 'border-zinc-700 bg-zinc-900/80 text-zinc-200 hover:bg-zinc-800'
-                        }`}
-                        onClick={handleBaseStorySave}
-                        disabled={!baseStoryDirty}
-                      >
-                        Save story
-                      </Button>
+<Button
+  size="sm"
+  variant={baseStoryDirty ? 'default' : 'outline'}
+  className={`mt-4 h-7 rounded-full px-3 text-[11px] transition-all ${
+    baseStoryDirty
+      ? 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-400 hover:shadow-md'
+      : 'border-zinc-600 bg-zinc-800/70 text-zinc-200 backdrop-blur-sm hover:bg-zinc-700'
+  }`}
+  onClick={handleBaseStorySave}
+  disabled={!baseStoryDirty}
+>
+  Save story
+</Button>
+
                     </div>
                   </div>
                 </CardContent>
