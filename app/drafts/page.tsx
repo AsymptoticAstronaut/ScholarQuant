@@ -543,7 +543,7 @@ export default function DraftStudioPage() {
   useEffect(() => {
     if (!editor) return
     const base = displayedDraft || ''
-    editor.commands.setContent(textToHTML(base), false)
+editor.commands.setContent(textToHTML(base), { emitUpdate: false })
     prevEditorTextRef.current = editor.getText()
   }, [editor, draftKey, displayedDraft])
 
@@ -658,7 +658,7 @@ export default function DraftStudioPage() {
 
       setHasGeneratedKeys((prev) => ({ ...prev, [draftKey]: true }))
 
-      editor.commands.setContent(textToHTML(nextDraft), false)
+editor.commands.setContent(textToHTML(nextDraft), { emitUpdate: false })
       reapplyLockedMarks(editor, lockedSegments)
       prevEditorTextRef.current = editor.getText()
     } catch (e) {
@@ -682,7 +682,11 @@ export default function DraftStudioPage() {
           [draftKey]: DEMO_DRAFT,
         }))
         setHasGeneratedKeys((prev) => ({ ...prev, [draftKey]: true }))
-        editor.commands.setContent(textToHTML(DEMO_DRAFT), false)
+editor.commands.setContent(textToHTML(DEMO_DRAFT), { emitUpdate: false })
+
+
+
+
         prevEditorTextRef.current = editor.getText()
       }
     } finally {
