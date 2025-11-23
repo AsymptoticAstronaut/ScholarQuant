@@ -132,25 +132,24 @@ const TYPE_DIMENSION_MATRIX: Record<
 export default function StudentProfilesPage() {
   const profiles = useStudentProfileStore((s) => s.profiles)
   const updateProfile = useStudentProfileStore((s) => s.updateProfile)
+  const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const setSelectedProfileId = useStudentProfileStore((s) => s.setSelectedProfileId)
 
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(
-    profiles[0]?.id ?? ''
-  )
   const [targetType, setTargetType] = useState<ScholarshipType>('Merit')
   const [baseStoryDraft, setBaseStoryDraft] = useState<string>('')
   const [baseStoryDirty, setBaseStoryDirty] = useState(false)
 
   const selectedStudent = useMemo(() => {
     if (profiles.length === 0) return undefined
-    if (!selectedStudentId) return profiles[0]
-    return profiles.find((s) => s.id === selectedStudentId) ?? profiles[0]
-  }, [profiles, selectedStudentId])
+    if (!selectedProfileId) return profiles[0]
+    return profiles.find((s) => s.id === selectedProfileId) ?? profiles[0]
+  }, [profiles, selectedProfileId])
 
   useEffect(() => {
-    if (!profiles.find((p) => p.id === selectedStudentId) && profiles[0]?.id) {
-      setSelectedStudentId(profiles[0].id)
+    if (!profiles.find((p) => p.id === selectedProfileId) && profiles[0]?.id) {
+      setSelectedProfileId(profiles[0].id)
     }
-  }, [profiles, selectedStudentId])
+  }, [profiles, selectedProfileId, setSelectedProfileId])
 
   useEffect(() => {
     if (!selectedStudent) return
@@ -289,7 +288,7 @@ export default function StudentProfilesPage() {
                             key={student.id}
                             type="button"
                             onClick={() => {
-                              setSelectedStudentId(student.id)
+                              setSelectedProfileId(student.id)
                               setBaseStoryDirty(false)
                             }}
                             className={`flex w-full flex-col items-start rounded-lg border px-2.5 py-2.5 transition ${

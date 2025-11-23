@@ -26,6 +26,7 @@ import {
   type ScholarshipType,
   type DimensionId,
 } from '@/lib/stores/scholarships-store'
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 /* -------------------------------------------------------------------------- */
 /*                                    SETUP                                   */
@@ -120,12 +121,51 @@ function generateRandomWeights() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                          STUDENT ALIGNMENT SCORING                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Calculate alignment score between student features and scholarship weights
+ * Returns a score from 0-100
+ */
+function calculateAlignment(
+  studentFeatures: Record<DimensionId, number>,
+  scholarshipWeights: Record<DimensionId, number>
+): number {
+  const dims: DimensionId[] = [
+    'academics',
+    'leadership',
+    'community',
+    'need',
+    'innovation',
+    'research',
+    'adversity',
+  ]
+
+  let score = 0
+  dims.forEach((dim) => {
+    const studentScore = studentFeatures[dim] ?? 0
+    const weight = scholarshipWeights[dim] ?? 0
+    score += studentScore * weight
+  })
+
+  return Math.round(score * 100)
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                   PAGE                                     */
 /* -------------------------------------------------------------------------- */
 
 export default function ScholarshipsPage() {
   const scholarships = useScholarshipStore((s) => s.scholarships)
   const addScholarship = useScholarshipStore((s) => s.addScholarship)
+
+  const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const studentProfiles = useStudentProfileStore((s) => s.profiles)
+  const selectedStudent = useMemo(
+    () => studentProfiles.find((p) => p.id === selectedProfileId),
+    [studentProfiles, selectedProfileId]
+  )
 
   const [selectedScholarshipId, setSelectedScholarshipId] =
     useState<string>('')
@@ -134,6 +174,8 @@ export default function ScholarshipsPage() {
   const [typeDraft, setTypeDraft] = useState<ScholarshipType | ''>('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [loadUrl, setLoadUrl] = useState('')
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
 
   const selectedScholarship = useMemo(() => {
     if (scholarships.length === 0) return undefined
@@ -162,6 +204,24 @@ export default function ScholarshipsPage() {
       .sort((a, b) => b.weight - a.weight)
   }, [selectedScholarship])
 
+  const rankedScholarships = useMemo(() => {
+    if (!selectedStudent) return []
+
+    return scholarships
+      .map((scholarship) => ({
+        scholarship,
+        alignmentScore: calculateAlignment(
+          selectedStudent.features,
+          scholarship.weights
+        ),
+      }))
+      .sort((a, b) => b.alignmentScore - a.alignmentScore)
+  }, [selectedStudent, scholarships])
+
+  const topMatches = useMemo(() => {
+    return rankedScholarships.slice(0, 5)
+  }, [rankedScholarships])
+
   const winnerPattern =
     (selectedScholarship &&
       WINNER_PATTERNS[selectedScholarship.id]) || {
@@ -172,28 +232,62 @@ export default function ScholarshipsPage() {
 
   /* ----------------------------- Add scholarship ---------------------------- */
 
-  function handleAnalyzeAndAdd() {
+  async function handleAnalyzeAndAdd() {
     if (!nameDraft.trim() || !typeDraft || !descriptionDraft.trim()) return
 
-    const weights = generateRandomWeights()
-    const priorities: DimensionId[] = DIMENSIONS.slice(0, 3).map((d) => d.id)
+    setIsAnalyzing(true)
+    setAnalysisError('')
 
-    addScholarship({
-      name: nameDraft.trim(),
-      type: typeDraft,
-      source: 'Manual',
-      description: descriptionDraft.trim(),
-      priorities,
-      weights,
-      genericScore: 50,
-      tailoredScore: 80,
-      stories: [],
-      winnerPatterns: []
-    })
+    try {
+      const weights = generateRandomWeights()
+      const priorities: DimensionId[] = DIMENSIONS.slice(0, 3).map((d) => d.id)
 
-    setNameDraft('')
-    setTypeDraft('')
-    setDescriptionDraft('')
+      // Call the scholarship-brief API
+      const response = await fetch('/api/scholarship-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nameDraft.trim(),
+          description: descriptionDraft.trim(),
+          type: typeDraft,
+          priorities,
+          weights,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to analyze scholarship')
+      }
+
+      const { summary, strategy } = await response.json()
+
+      addScholarship({
+        name: nameDraft.trim(),
+        type: typeDraft,
+        source: 'Manual',
+        description: descriptionDraft.trim(),
+        priorities,
+        weights,
+        genericScore: 50,
+        tailoredScore: 80,
+        summary,
+        strategy,
+        stories: [],
+        winnerPatterns: [],
+      })
+
+      setNameDraft('')
+      setTypeDraft('')
+      setDescriptionDraft('')
+    } catch (error) {
+      console.error('Error analyzing scholarship:', error)
+      setAnalysisError(
+        error instanceof Error ? error.message : 'Failed to analyze scholarship'
+      )
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   /* -------------------------------------------------------------------------- */
@@ -363,12 +457,22 @@ export default function ScholarshipsPage() {
                     </p>
                   </div>
 
+                  {/* Error message */}
+                  {analysisError && (
+                    <div className="rounded-lg border border-red-500/50 bg-red-900/20 px-3 py-2 text-[11px] text-red-200">
+                      <p className="font-medium">Error analyzing scholarship</p>
+                      <p className="mt-0.5">{analysisError}</p>
+                    </div>
+                  )}
+
                   {/* Footer */}
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-1 text-[11px] text-zinc-500">
                       <Upload className="h-3.5 w-3.5" />
                       <span>
-                        We’ll extract priorities and weights from your description.
+                        {isAnalyzing
+                          ? 'Analyzing with Claude...'
+                          : "We'll extract priorities and weights from your description."}
                       </span>
                     </div>
 
@@ -376,10 +480,11 @@ export default function ScholarshipsPage() {
                       type="button"
                       size="sm"
                       onClick={handleAnalyzeAndAdd}
-                      className="h-8 gap-1 rounded-full bg-sky-600 text-xs text-white hover:bg-sky-500"
+                      disabled={isAnalyzing}
+                      className="h-8 gap-1 rounded-full bg-sky-600 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
                     >
                       <Wand2 className="h-3.5 w-3.5" />
-                      <span>Add to library</span>
+                      <span>{isAnalyzing ? 'Analyzing...' : 'Add to library'}</span>
                     </Button>
                   </div>
                 </CardContent>
@@ -458,6 +563,81 @@ export default function ScholarshipsPage() {
               </Card>
             </motion.section>
 
+            {/* -------------------- Best Matches for Student -------------------- */}
+            {selectedStudent && topMatches.length > 0 && (
+              <motion.section
+                variants={VARIANTS_SECTION}
+                transition={TRANSITION_SECTION}
+              >
+                <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/70">
+                  <Spotlight
+                    className="from-purple-500/40 via-pink-400/20 to-purple-300/10 blur-2xl"
+                    size={120}
+                  />
+                  <CardHeader className="relative pb-3">
+                    <CardTitle className="text-sm text-zinc-50">
+                      Best matches for {selectedStudent.name}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-zinc-400">
+                      Top scholarships based on {selectedStudent.name}'s profile strengths
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="relative space-y-2 text-xs">
+                    {topMatches.map(({ scholarship, alignmentScore }) => (
+                      <button
+                        key={scholarship.id}
+                        type="button"
+                        onClick={() => setSelectedScholarshipId(scholarship.id)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                          scholarship.id === selectedScholarship?.id
+                            ? 'border-purple-500/70 bg-purple-900/30 ring-1 ring-purple-500/40'
+                            : 'border-zinc-800/70 bg-zinc-950/60 hover:bg-zinc-900/80'
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[13px] font-medium text-zinc-100">
+                              {scholarship.name}
+                            </p>
+                            <Badge
+                              variant="outline"
+                              className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0 text-[10px] text-zinc-200"
+                            >
+                              {typeBadge(scholarship.type)}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {scholarship.priorities.slice(0, 3).map((pid) => {
+                              const dim = DIMENSIONS.find((d) => d.id === pid)
+                              if (!dim) return null
+                              return (
+                                <Badge
+                                  key={pid}
+                                  variant="outline"
+                                  className="border-purple-700/70 bg-purple-900/30 px-1.5 py-0 text-[10px] text-purple-200"
+                                >
+                                  {dim.label}
+                                </Badge>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="ml-3 flex flex-col items-end">
+                          <span className="text-lg font-bold text-emerald-300">
+                            {alignmentScore}
+                          </span>
+                          <span className="text-[10px] text-zinc-500">
+                            alignment
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+              </motion.section>
+            )}
+
             {/* -------------------- ROW 2: Library + About + Personality -------------------- */}
 
             <motion.section
@@ -484,46 +664,66 @@ export default function ScholarshipsPage() {
                 <CardContent className="relative space-y-2 text-xs">
                   <div className="max-h-[360px] overflow-y-auto overflow-x-hidden pr-1">
                     <div className="space-y-1.5 text-xs">
-                      {scholarships.map((sch) => (
-                        <button
-                          key={sch.id}
-                          type="button"
-                          onClick={() => setSelectedScholarshipId(sch.id)}
-                          className={`flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition ${
-                            sch.id === selectedScholarship.id
-                              ? 'bg-zinc-900/90 ring-1 ring-sky-500/60'
-                              : 'bg-zinc-950/60 hover:bg-zinc-900/80'
-                          }`}
-                        >
-                          <div className="flex w-full items-center justify-between gap-2">
-                            <p className="truncate text-[13px] text-zinc-100">
-                              {sch.name}
-                            </p>
-                            <Badge
-                              variant="outline"
-                              className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0 text-[10px] text-zinc-200"
-                            >
-                              {typeBadge(sch.type)}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {(sch.priorities ?? []).map((pid) => {
-                              const dim = DIMENSIONS.find((d) => d.id === pid)
-                              if (!dim) return null
-                              return (
+                      {scholarships.map((sch) => {
+                        const alignmentScore = selectedStudent
+                          ? calculateAlignment(selectedStudent.features, sch.weights)
+                          : null
+                        return (
+                          <button
+                            key={sch.id}
+                            type="button"
+                            onClick={() => setSelectedScholarshipId(sch.id)}
+                            className={`flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition ${
+                              sch.id === selectedScholarship.id
+                                ? 'bg-zinc-900/90 ring-1 ring-sky-500/60'
+                                : 'bg-zinc-950/60 hover:bg-zinc-900/80'
+                            }`}
+                          >
+                            <div className="flex w-full items-center justify-between gap-2">
+                              <p className="truncate text-[13px] text-zinc-100">
+                                {sch.name}
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                {alignmentScore !== null && (
+                                  <span
+                                    className={`text-[11px] font-semibold ${
+                                      alignmentScore >= 80
+                                        ? 'text-emerald-400'
+                                        : alignmentScore >= 60
+                                        ? 'text-sky-400'
+                                        : 'text-zinc-500'
+                                    }`}
+                                  >
+                                    {alignmentScore}
+                                  </span>
+                                )}
                                 <Badge
-                                  key={pid}
                                   variant="outline"
-                                  className="border-sky-700/70 bg-sky-900/30 px-1.5 py-0 text-[10px] text-sky-200"
+                                  className="border-zinc-700 bg-zinc-900/70 px-1.5 py-0 text-[10px] text-zinc-200"
                                 >
-                                  {dim.label}
+                                  {typeBadge(sch.type)}
                                 </Badge>
-                              )
-                            })}
-                          </div>
-                        </button>
-                      ))}
+                              </div>
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {(sch.priorities ?? []).map((pid) => {
+                                const dim = DIMENSIONS.find((d) => d.id === pid)
+                                if (!dim) return null
+                                return (
+                                  <Badge
+                                    key={pid}
+                                    variant="outline"
+                                    className="border-sky-700/70 bg-sky-900/30 px-1.5 py-0 text-[10px] text-sky-200"
+                                  >
+                                    {dim.label}
+                                  </Badge>
+                                )
+                              })}
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </CardContent>
@@ -561,7 +761,7 @@ export default function ScholarshipsPage() {
                     </div>
 
                     <p className="mt-1 text-[11px] text-zinc-500">
-                      {selectedScholarship.description}
+                      {selectedScholarship.summary || selectedScholarship.description}
                     </p>
                   </div>
 
@@ -570,10 +770,16 @@ export default function ScholarshipsPage() {
                     <p className="mb-1 font-medium text-sky-100">
                       Suggested strategy
                     </p>
-                    <p className="mb-1 font-medium text-zinc-50">
-                      {winnerPattern.headline}
-                    </p>
-                    <p className="text-sky-100/90">{winnerPattern.guidance}</p>
+                    {selectedScholarship.strategy ? (
+                      <p className="whitespace-pre-line text-sky-100/90">{selectedScholarship.strategy}</p>
+                    ) : (
+                      <>
+                        <p className="mb-1 font-medium text-zinc-50">
+                          {winnerPattern.headline}
+                        </p>
+                        <p className="text-sky-100/90">{winnerPattern.guidance}</p>
+                      </>
+                    )}
                   </div>
 
                   <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-[11px] text-zinc-300">
