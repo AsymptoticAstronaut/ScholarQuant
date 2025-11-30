@@ -1,42 +1,46 @@
-UPDATES:
-Nov 19:
-- can now add scholarships
-- ability to store json format for profiles/scholarships: https://claude-kappa-ten.vercel.app/json-demo
-- please see /lib/stores/scholarships-store.ts and /lib/stores/student-profiles-store.ts you can change the interfaces as u wish, (it will break the UI for scholarship/profiles but I will fix it once we finalize the protocol)
-- you can see how to get the json string from /app/json-demo/page.tsx, i left u an example
-- added data like scholarships can now persist and data are managed by Zustand, stored locally
+ScholarQuant
+- UI: dashboard, scholarships, profiles, drafts
+- Auth: NextAuth with Cognito (Google as IdP).
+- Persistence: Postgres (RDS) for profiles; S3 for context files. API routes in `app/api/profiles/**` call repositories, UI uses Zustand store with API-backed actions.
+- Types/interfaces: domain types in `types/student-profile.ts`, `types/dimensions.ts`; repositories in `lib/domain/student-profile-repository.ts`; Postgres adapter in `lib/server/postgres-student-profile-repository.ts`; S3 adapter in `lib/server/s3-student-context-file-storage.ts`.
 
+Setup (local dev)
+1) Install Node 18+.
+2) Copy `.env.local.example` (or fill `.env.local`) with:
+   - Auth: `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `COGNITO_ISSUER`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+   - Database: `DATABASE_URL=postgresql://<user>:<pass>@<host>:5432/<db>`, `STUDENT_PROFILES_TABLE=student_profiles`, `POSTGRES_SSL=true` (default).
+   - Files: `STUDENT_FILES_BUCKET=<your-bucket>`, `AWS_REGION=<region>`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+3) Create the table (in your DB):
+   ```sql
+   CREATE TABLE IF NOT EXISTS student_profiles (
+     user_id text NOT NULL,
+     profile_id uuid NOT NULL,
+     data jsonb NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now(),
+     updated_at timestamptz NOT NULL DEFAULT now(),
+     PRIMARY KEY (user_id, profile_id)
+   );
+   ```
+4) Install deps: `npm install`
+5) Run: `npm run dev` then open http://localhost:3000
 
-Todo Priority List:
-1) Create UI concept DONE
-2) Decide what each page looks like/what ideas we include and exclude (must finalize this today) DONE
-3) Design how to integrate Claude In progress
-4) integrate Claude in progress
-5) create slide deck
+Security principles
+- Least privilege: IAM policy limited to bucket `student-profile-files` (Put/Delete/Get/List). Use IAM role on AWS compute; for local dev use a dedicated key and rotate.
+- No public S3 access; rely on auth + signed requests via API. Keep RDS SG scoped (your IP for dev; app SG in prod).
+- Secrets in env vars; do not commit keys. Prefer IAM roles in prod instead of long-lived keys.
+- TLS everywhere: RDS connections use SSL by default (`rejectUnauthorized: false` for RDS cert), S3 via HTTPS.
 
-Schedule:
-- Yasser's Availability: Wednesday, Thursday, and Friday all evenings (6pm+), Saturday all day.
-- Frank's Availability: 
+SOLID & boundaries
+- Single responsibility: domain types live in `types/*`; persistence ports in `lib/domain/*`; adapters in `lib/server/*`; UI state in `lib/stores/*`.
+- Open/closed: swap repositories/adapters (e.g., another DB) without touching UI or domain.
+- Liskov: `StudentProfileRepository` and `StudentContextFileStorage` implementations are interchangeable by contract.
+- Interface segregation: file storage separated from profile CRUD.
+- Dependency inversion: UI calls API; API depends on interfaces, then concrete Postgres/S3 adapters.
 
-- Due saturday, presenting sunday
+Key flows
+- Profiles: UI store calls `/api/profiles` (list/create) and `/api/profiles/[id]` (get/patch/delete). Data persisted in Postgres JSONB per user.
+- Files: UI calls `/api/profiles/[id]/files` (POST multipart; GET metadata) and `/api/profiles/[id]/files/[fileId]` (DELETE). Blobs in S3, metadata in Postgres.
 
-Criteria: https://docs.google.com/document/d/10MTWMA11nTSyE13TyuPFa0Ue0-CDIzSkgJFHekWhNfg/edit?tab=t.b6b6c5gvinhe#heading=h.23q0e57ydvo0
-
-Description:
-- Scholarship essay generating app
-  Below is the user flow in chronological order
-- User opens dashboard, sees reccomended action/overview of analytics
-- User opens scholarships, user can add scholarships/import
-- User opens student profiles, selects the right one, gets analytics on which scholarships is best match
-- Pattern lab  analyzes all the technical stuff, like making stats on which scholarship is most relevant (uses heatmap, ngrams, correlation map)
-- FInally, user can draft essay in Draft Studio, there are draft controls etc
-- Done, user can also change privacy controls in settings
-
-Instructions:
-- Download node https://nodejs.org/en
-- Download our github repo zip, extract
-- run cmd, cd to project, then type: install node
-- then: npm run dev
-- open  http://localhost:3000
-- changes in ur editor reflect almost immidiately locally, im using vscode 
-- if there are no errors, push to github and vercel will update our site automatically
+Notes
+- For local dev against RDS: open SG to your IP; for prod, run inside VPC and disable public access.
+- If you point to a local Postgres without SSL, set `POSTGRES_SSL=false`.
