@@ -126,7 +126,6 @@ export default function StudentProfilesPage() {
 
   const [targetType, setTargetType] = useState<ScholarshipType>('Merit')
   const [baseStoryDraft, setBaseStoryDraft] = useState<string>('')
-  const [baseStoryDirty, setBaseStoryDirty] = useState(false)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const [stage, setStage] = useState<'basics1' | 'basics2' | 'questions'>('basics1')
@@ -152,6 +151,8 @@ export default function StudentProfilesPage() {
   const [profileFileLabel, setProfileFileLabel] = useState('')
   const [profileFileLoading, setProfileFileLoading] = useState(false)
   const [profileFileError, setProfileFileError] = useState<string | null>(null)
+  const [pendingSave, setPendingSave] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
 
   const steps = [
     {
@@ -203,13 +204,20 @@ export default function StudentProfilesPage() {
 
   useEffect(() => {
     if (!selectedStudent) return
-    if (baseStoryDirty) return
     setBaseStoryDraft(selectedStudent.baseStory ?? '')
-  }, [selectedStudent?.id, selectedStudent?.baseStory, baseStoryDirty])
+  }, [selectedStudent?.id, selectedStudent?.baseStory])
 
   const onProfileFieldChange = (field: keyof StudentProfile, value: any) => {
     if (!selectedStudent) return
-    updateProfile(selectedStudent.id, { [field]: value })
+    setPendingSave(true)
+    const updated = { ...selectedStudent, [field]: value }
+    setSelectedProfileId(updated.id)
+    // local-only update
+    const nextProfiles = profiles.map((p) => (p.id === updated.id ? updated : p))
+    // we don't want to mutate store directly; rely on explicit save
+    // but keep local view consistent
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    useStudentProfileStore.setState({ profiles: nextProfiles })
   }
 
   const showMissingNotice = searchParams?.get('missing') === '1'
@@ -231,6 +239,12 @@ export default function StudentProfilesPage() {
     (field: keyof typeof starter) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setStarter((prev) => ({ ...prev, [field]: e.target.value }))
+
+  const renderSaveStatus = () => {
+    if (pendingSave) return <span className="text-[11px] text-amber-200">Unsaved changes</span>
+    if (lastSavedAt) return <span className="text-[11px] text-emerald-300">Saved</span>
+    return <span className="text-[11px] text-zinc-500">No changes</span>
+  }
 
   const handleStepChange = (value: string) => {
     const key = steps[currentStep]?.key
@@ -674,15 +688,8 @@ export default function StudentProfilesPage() {
   const stats = selectedStudent.stats
 
   const handleBaseStoryChange = (value: string) => {
-    setBaseStoryDirty(true)
     setBaseStoryDraft(value)
-  }
-
-  const handleBaseStorySave = () => {
-    updateProfile(selectedStudent.id, {
-      baseStory: baseStoryDraft.trim(),
-    })
-    setBaseStoryDirty(false)
+    setPendingSave(true)
   }
 
   return (
@@ -780,7 +787,6 @@ export default function StudentProfilesPage() {
                             type="button"
                             onClick={() => {
                               setSelectedProfileId(student.id)
-                              setBaseStoryDirty(false)
                             }}
                             className={`flex w-full flex-col items-start rounded-lg border px-2.5 py-2.5 text-left transition ${
                               selectedStudent.id === student.id
@@ -798,7 +804,10 @@ export default function StudentProfilesPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] text-zinc-300">Profile basics</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] text-zinc-300">Profile basics</label>
+                        {renderSaveStatus()}
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <Input
                           value={selectedStudent.name}
@@ -915,9 +924,11 @@ export default function StudentProfilesPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[11px] text-zinc-300">
-                      Base story for this profile
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] text-zinc-300">
+                        Base story for this profile
+                      </label>
+                    </div>
                     <Textarea
                       rows={6}
                       value={baseStoryDraft}
@@ -925,22 +936,32 @@ export default function StudentProfilesPage() {
                       placeholder="Write a single, reusable story that captures background, goals, and key experiences. Draft Studio will tailor this for each scholarship."
                       className="border-zinc-700 bg-zinc-950/80 text-xs text-zinc-100"
                     />
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-zinc-500">
-                        Your base story is saved privately to this profile.
-                      </span>
+                    <div className="flex justify-end">
                       <Button
+                        type="button"
                         size="sm"
-                        variant={baseStoryDirty ? 'default' : 'outline'}
-                        className={`mt-1 h-7 rounded-full px-3 text-[11px] transition-all ${
-                          baseStoryDirty
-                            ? 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-400 hover:shadow-md'
-                            : 'border-zinc-600 bg-zinc-800/70 text-zinc-200 backdrop-blur-sm hover:bg-zinc-700'
-                        }`}
-                        onClick={handleBaseStorySave}
-                        disabled={!baseStoryDirty}
+                        className="h-8 border border-emerald-400/60 bg-emerald-500/15 px-3 text-[11px] text-emerald-100 hover:bg-emerald-500/25 hover:border-emerald-300/80"
+                        disabled={!pendingSave}
+                        onClick={async () => {
+                          if (!selectedStudent) return
+                          setPendingSave(false)
+                          try {
+                            await updateProfile(selectedStudent.id, {
+                              baseStory: baseStoryDraft.trim(),
+                              name: selectedStudent.name,
+                              university: selectedStudent.university,
+                              program: selectedStudent.program,
+                              year: selectedStudent.year,
+                              gpa: selectedStudent.gpa,
+                              gpaScale: selectedStudent.gpaScale,
+                            })
+                            setLastSavedAt(new Date().toISOString())
+                          } catch (err) {
+                            setPendingSave(true)
+                          }
+                        }}
                       >
-                        Save story
+                        Save changes
                       </Button>
                     </div>
                   </div>
