@@ -222,9 +222,9 @@ export default function StudentProfilesPage() {
     selectedStudent.gpa == null
 
   const parseGpa = (value: string) => {
-    if (!value.trim()) return null
+    if (!value.trim()) return undefined
     const num = parseFloat(value)
-    return Number.isFinite(num) ? num : null
+    return Number.isFinite(num) ? num : undefined
   }
 
   const onChange =
@@ -738,7 +738,7 @@ export default function StudentProfilesPage() {
                       <div className="flex items-center justify-between text-[11px] text-zinc-400">
                         <span>Select a profile</span>
                         <Button
-                          size="xs"
+                          size="sm"
                           variant="outline"
                           className="h-6 border-fuchsia-500/70 bg-zinc-950/70 px-2 text-[11px] text-fuchsia-100 hover:bg-fuchsia-900/40"
                           onClick={() => setShowQuickCreate(true)}
@@ -804,7 +804,7 @@ export default function StudentProfilesPage() {
                           onChange={(e) =>
                             onProfileFieldChange(
                               'gpa',
-                              e.target.value === '' ? null : parseFloat(e.target.value),
+                              e.target.value === '' ? undefined : parseFloat(e.target.value),
                             )
                           }
                           placeholder="GPA"
