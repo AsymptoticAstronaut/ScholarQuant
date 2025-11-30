@@ -2,15 +2,8 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-
-export type DimensionId =
-  | 'academics'
-  | 'leadership'
-  | 'community'
-  | 'need'
-  | 'innovation'
-  | 'research'
-  | 'adversity'
+import type { DimensionId } from '@/types/dimensions'
+export type { DimensionId } from '@/types/dimensions'
 
 export type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
 

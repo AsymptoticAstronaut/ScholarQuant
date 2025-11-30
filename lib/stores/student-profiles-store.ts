@@ -2,76 +2,11 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { DimensionId } from './scholarships-store'
-
-export type StudentStory = {
-  id: string
-  title: string
-  summary: string
-  dimensionTags: DimensionId[]
-}
-
-export type StudentStats = {
-  scholarshipsMatched: number
-  draftsGenerated: number
-  avgAlignment: number
-  lastActiveAt?: string
-  topMatchIds?: string[]
-}
-
-export type StudentContextFile = {
-  id: string
-  name: string
-  label: string
-}
-
-export type StudentProfile = {
-  id: string
-  name: string
-  program: string
-  year: string
-  tags: string[]
-
-  gpa?: number
-  gpaScale?: 4 | 12 | 100
-  location?: string
-  university?: string
-  campus?: string
-  degreeLevel?: 'Undergraduate' | 'Graduate' | 'College' | 'Other'
-  enrollmentStatus?: 'Full-time' | 'Part-time' | 'Co-op/PEY' | 'Other'
-  citizenshipStatus?: 'Domestic' | 'International' | 'Permanent Resident' | 'Other'
-  firstGen?: boolean
-  languages?: string[]
-  workStatus?: 'Not working' | 'Part-time' | 'Full-time'
-  financialNeedLevel?: 'Low' | 'Medium' | 'High' | 'Prefer not to say'
-  awards?: string[]
-  testScores?: Partial<{
-    sat: number
-    act: number
-    gre: number
-    gmat: number
-    toefl: number
-    ielts: number
-  }>
-
-  recommendedScholarshipIds: string[]
-
-  features: Record<DimensionId, number>
-  stories: StudentStory[]
-  baseStory?: string
-  contextFiles?: StudentContextFile[]
-  stats: StudentStats
-}
-
-export const EMPTY_FEATURES: Record<DimensionId, number> = {
-  academics: 0,
-  leadership: 0,
-  community: 0,
-  need: 0,
-  innovation: 0,
-  research: 0,
-  adversity: 0,
-}
+import {
+  EMPTY_FEATURES,
+  type StudentProfile,
+  isProfileComplete,
+} from '@/types/student-profile'
 
 const SEED_STUDENT_PROFILES: StudentProfile[] = [
   {
@@ -267,6 +202,9 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
 type StudentProfileState = {
   profiles: StudentProfile[]
   selectedProfileId: string | null
+  loading: boolean
+  hasFetched: boolean
+  error: string | null
   addProfile: (data: Omit<StudentProfile, 'id'> & { id?: string }) => void
   updateProfile: (id: string, patch: Partial<StudentProfile>) => void
   removeProfile: (id: string) => void
@@ -274,16 +212,7 @@ type StudentProfileState = {
   loadMockProfiles: () => void
   setSelectedProfileId: (id: string | null) => void
   isProfileComplete: (id: string | null) => boolean
-}
-
-const isComplete = (profile?: StudentProfile | null) => {
-  if (!profile) return false
-  if (!profile.name?.trim()) return false
-  if (!profile.university?.trim()) return false
-  if (!profile.program?.trim()) return false
-  if (!profile.year?.trim()) return false
-  if (profile.gpa == null) return false
-  return true
+  loadProfiles: () => Promise<void>
 }
 
 export const useStudentProfileStore = create<StudentProfileState>()(
@@ -291,32 +220,14 @@ export const useStudentProfileStore = create<StudentProfileState>()(
     (set, get) => ({
       profiles: [],
       selectedProfileId: null,
+      loading: false,
+      hasFetched: false,
+      error: null,
       addProfile: (data) => {
-        const id = data.id ?? crypto.randomUUID()
-        const newProfile: StudentProfile = {
-          id,
-          name: data.name ?? '',
-          program: data.program ?? '',
-          year: data.year ?? '',
-          tags: data.tags ?? [],
-          gpa: data.gpa,
-          gpaScale: data.gpaScale,
-          location: data.location,
-          university: data.university,
-          campus: data.campus,
-          degreeLevel: data.degreeLevel,
-          enrollmentStatus: data.enrollmentStatus,
-          citizenshipStatus: data.citizenshipStatus,
-          firstGen: data.firstGen,
-          languages: data.languages ?? [],
-          workStatus: data.workStatus,
-          financialNeedLevel: data.financialNeedLevel,
-          awards: data.awards ?? [],
-          testScores: data.testScores ?? {},
-          recommendedScholarshipIds: data.recommendedScholarshipIds ?? [],
+        const payload = {
+          ...data,
           features: data.features ?? { ...EMPTY_FEATURES },
           stories: data.stories ?? [],
-          baseStory: data.baseStory,
           contextFiles: data.contextFiles ?? [],
           stats: data.stats ?? {
             scholarshipsMatched: 0,
@@ -324,29 +235,73 @@ export const useStudentProfileStore = create<StudentProfileState>()(
             avgAlignment: 0,
           },
         }
-        const profiles = [...get().profiles, newProfile]
-        set({
-          profiles,
-          selectedProfileId: get().selectedProfileId ?? id
+
+        set({ loading: true, error: null })
+
+        fetch('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
         })
+          .then(async (res) => {
+            if (!res.ok) throw new Error(await res.text())
+            return res.json() as Promise<StudentProfile>
+          })
+          .then((created) => {
+            const profiles = [...get().profiles, created]
+            const selectedProfileId = get().selectedProfileId ?? created.id
+            set({ profiles, selectedProfileId })
+          })
+          .catch((err) => set({ error: err.message }))
+          .finally(() => set({ loading: false }))
       },
       updateProfile: (id, patch) => {
-        set({
-          profiles: get().profiles.map((p) =>
-            p.id === id ? { ...p, ...patch } : p
-          )
+        set({ loading: true, error: null })
+
+        fetch(`/api/profiles/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(patch),
         })
+          .then(async (res) => {
+            if (!res.ok) throw new Error(await res.text())
+            return res.json() as Promise<StudentProfile>
+          })
+          .then((updated) => {
+            set({
+              profiles: get().profiles.map((p) =>
+                p.id === id ? { ...p, ...updated } : p
+              ),
+            })
+          })
+          .catch((err) => set({ error: err.message }))
+          .finally(() => set({ loading: false }))
       },
       removeProfile: (id) => {
-        const nextProfiles = get().profiles.filter((p) => p.id !== id)
-        const nextSelected =
-          get().selectedProfileId === id
-            ? nextProfiles[0]?.id ?? null
-            : get().selectedProfileId
-        set({
-          profiles: nextProfiles,
-          selectedProfileId: nextSelected
+        set({ loading: true, error: null })
+
+        fetch(`/api/profiles/${id}`, {
+          method: 'DELETE',
+          credentials: 'include',
         })
+          .then(async (res) => {
+            if (!res.ok) throw new Error(await res.text())
+          })
+          .then(() => {
+            const nextProfiles = get().profiles.filter((p) => p.id !== id)
+            const nextSelected =
+              get().selectedProfileId === id
+                ? nextProfiles[0]?.id ?? null
+                : get().selectedProfileId
+            set({
+              profiles: nextProfiles,
+              selectedProfileId: nextSelected,
+            })
+          })
+          .catch((err) => set({ error: err.message }))
+          .finally(() => set({ loading: false }))
       },
       loadMockProfiles: () =>
         set({
@@ -361,12 +316,43 @@ export const useStudentProfileStore = create<StudentProfileState>()(
       setSelectedProfileId: (id) => set({ selectedProfileId: id }),
       isProfileComplete: (id) => {
         const profile = get().profiles.find((p) => p.id === id) ?? null
-        return isComplete(profile)
+        return isProfileComplete(profile)
+      },
+      loadProfiles: async () => {
+        set({ loading: true, error: null })
+        try {
+          const res = await fetch('/api/profiles', { credentials: 'include' })
+          if (!res.ok) {
+            throw new Error(await res.text())
+          }
+
+          const profiles = (await res.json()) as StudentProfile[]
+          const selectedProfileId = get().selectedProfileId
+          const resolvedSelection =
+            (selectedProfileId &&
+              profiles.find((p) => p.id === selectedProfileId)?.id) ??
+            profiles[0]?.id ??
+            null
+
+          set({
+            profiles,
+            selectedProfileId: resolvedSelection,
+            hasFetched: true,
+          })
+        } catch (err: any) {
+          set({
+            error: err?.message ?? 'Failed to load profiles',
+            hasFetched: true,
+          })
+        } finally {
+          set({ loading: false })
+        }
       }
     }),
     {
       name: 'agentiiv-student-profiles-v1',
-      storage: createJSONStorage(() => localStorage)
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ selectedProfileId: state.selectedProfileId })
     }
   )
 )

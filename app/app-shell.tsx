@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Footer } from './footer'
 import { Header } from './header'
 import { Sidebar } from './sidebar'
@@ -17,9 +18,13 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname?.startsWith(route))
+  const { status } = useSession()
 
   const profiles = useStudentProfileStore((s) => s.profiles)
   const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const loadProfiles = useStudentProfileStore((s) => s.loadProfiles)
+  const hasFetched = useStudentProfileStore((s) => s.hasFetched)
+  const loadingProfiles = useStudentProfileStore((s) => s.loading)
   const [hydrated, setHydrated] = useState(false)
   const isProfileComplete = useStudentProfileStore((s) => s.isProfileComplete)
   const selectedProfile = useMemo(
@@ -33,12 +38,17 @@ export function AppShell({ children }: AppShellProps) {
     return () => unsub?.()
   }, [])
 
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    loadProfiles()
+  }, [status, loadProfiles])
+
   const hasProfiles = profiles.length > 0
   const hasCompleteProfile =
     !!selectedProfileId && isProfileComplete(selectedProfileId)
 
   const shouldGateToProfiles =
-    hydrated &&
+    hasFetched &&
     !isAuthRoute &&
     !pathname?.startsWith('/profiles') &&
     (!hasProfiles || !hasCompleteProfile)
@@ -58,18 +68,31 @@ export function AppShell({ children }: AppShellProps) {
     )
   }
 
-  if (!hydrated) {
+  if (!hydrated || status === 'loading' || (status === 'authenticated' && !hasFetched)) {
     return (
       <div className="fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#050013] via-[#050010] to-black text-zinc-200">
         <div className="relative z-10 flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/80 px-4 py-2 shadow-lg shadow-black/40">
           <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-500 border-t-white" />
-          <span className="text-sm">Loading profiles...</span>
+          <span className="text-sm">
+            {status === 'loading' ? 'Checking session...' : 'Loading profiles...'}
+          </span>
         </div>
       </div>
     )
   }
 
-  if (shouldGateToProfiles) {
+  if (loadingProfiles) {
+    return (
+      <div className="fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#050013] via-[#050010] to-black text-zinc-200">
+        <div className="relative z-10 flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/80 px-4 py-2 shadow-lg shadow-black/40">
+          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-500 border-t-white" />
+          <span className="text-sm">Syncing profiles...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (shouldGateToProfiles && status === 'authenticated') {
     return (
       <div className="fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#050013] via-[#050010] to-black text-zinc-200">
         <div className="relative z-10 flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/80 px-4 py-2 shadow-lg shadow-black/40">

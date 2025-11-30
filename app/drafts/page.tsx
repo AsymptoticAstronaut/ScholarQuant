@@ -33,24 +33,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 
 import { useScholarshipStore } from '@/lib/stores/scholarships-store'
-import {
-  useStudentProfileStore,
-  type StudentProfile,
-} from '@/lib/stores/student-profiles-store'
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
+import type { DimensionId } from '@/types/dimensions'
+import type { StudentProfile } from '@/types/student-profile'
 
 // Tiptap
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Mark } from '@tiptap/core'
-
-type DimensionId =
-  | 'academics'
-  | 'leadership'
-  | 'community'
-  | 'need'
-  | 'innovation'
-  | 'research'
-  | 'adversity'
 
 type Dimension = { id: DimensionId; label: string }
 

@@ -30,12 +30,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Spotlight } from '@/components/ui/spotlight'
 
-import {
-  useStudentProfileStore,
-  EMPTY_FEATURES,
-  type StudentProfile,
-} from '@/lib/stores/student-profiles-store'
-import type { DimensionId } from '@/lib/stores/scholarships-store'
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
+import type { DimensionId } from '@/types/dimensions'
+import { EMPTY_FEATURES, type StudentProfile } from '@/types/student-profile'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
