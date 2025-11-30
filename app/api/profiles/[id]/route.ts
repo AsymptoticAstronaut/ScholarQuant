@@ -16,14 +16,15 @@ const getUserId = async () => {
   return session?.user?.id ?? null
 }
 
-type Params = { params: { id: string } }
+type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_: Request, { params }: Params) {
   const userId = await getUserId()
   if (!userId) return unauthorized()
 
   try {
-    const profile = await repo.getProfile(userId, params.id)
+    const { id } = await params
+    const profile = await repo.getProfile(userId, id)
     if (!profile) return notFound()
     return NextResponse.json(profile)
   } catch (err) {
@@ -37,8 +38,9 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!userId) return unauthorized()
 
   try {
+    const { id } = await params
     const body = await req.json()
-    const updated = await repo.updateProfile(userId, params.id, body)
+    const updated = await repo.updateProfile(userId, id, body)
     return NextResponse.json(updated)
   } catch (err) {
     console.error('Failed to update profile', err)
@@ -51,11 +53,11 @@ export async function DELETE(_: Request, { params }: Params) {
   if (!userId) return unauthorized()
 
   try {
-    await repo.deleteProfile(userId, params.id)
+    const { id } = await params
+    await repo.deleteProfile(userId, id)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('Failed to delete profile', err)
     return NextResponse.json({ error: 'Failed to delete profile' }, { status: 500 })
   }
 }
-

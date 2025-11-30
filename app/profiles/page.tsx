@@ -149,6 +149,8 @@ export default function StudentProfilesPage() {
   >([])
   const [profilePendingFile, setProfilePendingFile] = useState<File | null>(null)
   const [profileFileLabel, setProfileFileLabel] = useState('')
+  const [profileFileLoading, setProfileFileLoading] = useState(false)
+  const [profileFileError, setProfileFileError] = useState<string | null>(null)
 
   const steps = [
     {
@@ -254,28 +256,55 @@ export default function StudentProfilesPage() {
     setUploadedFiles((prev) => prev.filter((file) => file.id !== id))
   }
 
-  const handleProfileAddFile = () => {
+  const handleProfileAddFile = async () => {
     if (!selectedStudent || !profilePendingFile || !profileFileLabel.trim()) return
-    const current = selectedStudent.contextFiles ?? []
-    const next = [
-      ...current,
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: profilePendingFile.name,
-        label: profileFileLabel.trim(),
-      },
-    ]
-    updateProfile(selectedStudent.id, { contextFiles: next })
-    setProfilePendingFile(null)
-    setProfileFileLabel('')
+    setProfileFileLoading(true)
+    setProfileFileError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', profilePendingFile)
+      formData.append('label', profileFileLabel.trim())
+
+      const res = await fetch(`/api/profiles/${selectedStudent.id}/files`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        throw new Error(await res.text())
+      }
+
+      const files = (await res.json()) as StudentProfile['contextFiles']
+      updateProfile(selectedStudent.id, { contextFiles: files ?? [] })
+      setProfilePendingFile(null)
+      setProfileFileLabel('')
+    } catch (err: any) {
+      setProfileFileError(err?.message ?? 'Failed to upload file')
+    } finally {
+      setProfileFileLoading(false)
+    }
   }
 
-  const handleProfileRemoveFile = (fileId: string) => {
+  const handleProfileRemoveFile = async (fileId: string) => {
     if (!selectedStudent) return
-    const current = selectedStudent.contextFiles ?? []
-    updateProfile(selectedStudent.id, {
-      contextFiles: current.filter((file) => file.id !== fileId),
-    })
+    setProfileFileLoading(true)
+    setProfileFileError(null)
+    try {
+      const res = await fetch(`/api/profiles/${selectedStudent.id}/files/${fileId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        throw new Error(await res.text())
+      }
+      const files = (await res.json()) as StudentProfile['contextFiles']
+      updateProfile(selectedStudent.id, { contextFiles: files ?? [] })
+    } catch (err: any) {
+      setProfileFileError(err?.message ?? 'Failed to remove file')
+    } finally {
+      setProfileFileLoading(false)
+    }
   }
 
   const handleAdvance = () => {
@@ -920,6 +949,9 @@ export default function StudentProfilesPage() {
                     <p className="text-[11px] text-zinc-500">
                       Keep track of essays or resumes you want to reference with this profile.
                     </p>
+                    {profileFileError ? (
+                      <p className="text-[11px] text-red-300">{profileFileError}</p>
+                    ) : null}
                     <div className="flex flex-wrap gap-1.5">
                       {selectedStudent.contextFiles && selectedStudent.contextFiles.length > 0 ? (
                         selectedStudent.contextFiles.map((file) => (
@@ -937,6 +969,7 @@ export default function StudentProfilesPage() {
                               onClick={() => handleProfileRemoveFile(file.id)}
                               className="ml-1 rounded-full px-1 text-[10px] text-fuchsia-200/80 hover:bg-fuchsia-800/60 hover:text-fuchsia-50"
                               aria-label="Remove file"
+                              disabled={profileFileLoading}
                             >
                               ×
                             </button>
@@ -978,15 +1011,16 @@ export default function StudentProfilesPage() {
                         value={profileFileLabel}
                         onChange={(e) => setProfileFileLabel(e.target.value)}
                         className="h-8 max-w-[180px] border-zinc-700 bg-zinc-950/80 text-xs text-zinc-100"
+                        disabled={profileFileLoading}
                       />
                       <Button
                         type="button"
                         size="sm"
                         className="h-8 border border-fuchsia-300/60 bg-fuchsia-500/15 px-3 text-[11px] text-fuchsia-50 backdrop-blur-md hover:bg-fuchsia-500/25 hover:border-fuchsia-200/80"
                         onClick={handleProfileAddFile}
-                        disabled={!profilePendingFile || !profileFileLabel.trim()}
+                        disabled={profileFileLoading || !profilePendingFile || !profileFileLabel.trim()}
                       >
-                        Add
+                        {profileFileLoading ? 'Uploading...' : 'Add'}
                       </Button>
                     </div>
                   </div>
