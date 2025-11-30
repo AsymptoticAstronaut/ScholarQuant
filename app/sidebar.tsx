@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Sun,
   Moon,
@@ -17,6 +18,7 @@ import {
   UserCircle2 as UserIcon,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { signOut } from 'next-auth/react'
 import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 const EMAIL = 'yasser.noori@mail.utoronto.ca'
@@ -24,13 +26,16 @@ const LINKEDIN = 'https://www.linkedin.com/in/yasser-noori'
 const GITHUB = 'https://github.com/AsymptoticAstronaut'
 
 export function Sidebar() {
+  const router = useRouter()
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [studentMenuOpen, setStudentMenuOpen] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const studentMenuRef = useRef<HTMLDivElement>(null)
   const studentProfiles = useStudentProfileStore((s) => s.profiles)
   const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
+  const isProfileComplete = useStudentProfileStore((s) => s.isProfileComplete)
   const setSelectedProfileId = useStudentProfileStore((s) => s.setSelectedProfileId)
   const selectedStudent = useMemo(
     () => studentProfiles.find((profile) => profile.id === selectedProfileId),
@@ -38,6 +43,11 @@ export function Sidebar() {
   )
 
   useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const unsub = useStudentProfileStore.persist?.onFinishHydration?.(() => setHydrated(true))
+    if (useStudentProfileStore.persist?.hasHydrated?.()) setHydrated(true)
+    return () => unsub?.()
+  }, [])
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       if (!studentMenuRef.current) return
@@ -86,9 +96,9 @@ export function Sidebar() {
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light')
 
   const navItems = [
-    { href: '/', label: 'Dashboard', Icon: LayoutDashboard },
+    { href: '/profiles', label: 'Profiles', Icon: UserCircle2 },
+    { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
     { href: '/scholarships', label: 'Scholarships', Icon: BookOpenCheck },
-    { href: '/profiles', label: 'Student Profiles', Icon: UserCircle2 },
     { href: '/pattern-lab', label: 'Pattern Lab', Icon: Activity },
     { href: '/drafts', label: 'Draft Studio', Icon: FileText },
   ]
@@ -96,6 +106,11 @@ export function Sidebar() {
   const secondaryItems = [
     { href: '/settings', label: 'Settings', Icon: SlidersHorizontal },
   ]
+
+  const profileIncomplete =
+    hydrated && !!selectedProfileId && !isProfileComplete(selectedProfileId)
+  const noProfiles = hydrated && studentProfiles.length === 0
+  const lockNav = noProfiles || profileIncomplete
 
   return (
     <>
@@ -244,38 +259,61 @@ export function Sidebar() {
               Navigate
             </div>
 
-            {navItems.map(({ href, label, Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)]
-"
-              >
-                <Icon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
-                <span className="font-normal text-zinc-800 dark:text-zinc-100">
-                  {label}
-                </span>
-              </Link>
-            ))}
+            {navItems.map(({ href, label, Icon }) => {
+              const disabled = lockNav && href !== '/profiles'
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={(e) => {
+                    if (disabled) {
+                      e.preventDefault()
+                      router.push('/profiles?missing=1')
+                    }
+                  }}
+                  className={`flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)] ${
+                    disabled ? 'cursor-not-allowed opacity-60' : ''
+                  }`}
+                  aria-disabled={disabled}
+                >
+                  <Icon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
+                  <span className="font-normal text-zinc-800 dark:text-zinc-100">
+                    {label}
+                  </span>
+                </Link>
+              )
+            })}
 
             {secondaryItems.length > 0 && (
               <>
                 <div className="mt-4 mb-2 px-2 text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   System
                 </div>
-                {secondaryItems.map(({ href, label, Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)]
-"
-                  >
-                    <Icon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
-                    <span className="font-normal text-zinc-800 dark:text-zinc-100">
-                      {label}
-                    </span>
-                  </Link>
-                ))}
+                {secondaryItems.map(({ href, label, Icon }) => {
+                  const disabled = lockNav
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={(e) => {
+                        if (disabled) {
+                          e.preventDefault()
+                          router.push('/profiles?missing=1')
+                        }
+                      }}
+                      className={`flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)] ${
+                        disabled ? 'cursor-not-allowed opacity-60' : ''
+                      }`}
+                      aria-disabled={disabled}
+                    >
+                      <Icon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
+                      <span className="font-normal text-zinc-800 dark:text-zinc-100">
+                        {label}
+                      </span>
+                    </Link>
+                  )
+                })}
               </>
             )}
           </nav>
@@ -300,6 +338,18 @@ export function Sidebar() {
                 </div>
                 <ExternalLink className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
               </a>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="flex items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)]"
+              >
+                <div className="flex items-center gap-3">
+                  <UserIcon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
+                  <span className="text-sm font-normal text-zinc-800 dark:text-zinc-100">
+                    Sign out
+                  </span>
+                </div>
+              </button>
             </div>
           </div>
         </div>

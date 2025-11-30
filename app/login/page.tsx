@@ -13,36 +13,35 @@ export default function LoginPage() {
   const { status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const hasRetried = useRef(false)
 
   const error = searchParams.get('error')
-  const isRetrying = error === 'OAuthCallback' && !hasRetried.current
 
-  const errorMessage =
-    error === 'Callback'
-      ? 'Sign-in failed. Try again.'
-      : error === 'AccessDenied'
-        ? 'Access was denied. Try a different account.'
-        : error
-          ? 'Sign-in could not be completed. Please try again.'
-          : null
+  const errorMessage = (() => {
+    if (!error) return null
 
-  useEffect(() => {
-    if (status === 'authenticated') router.push('/')
-  }, [status, router])
-
-  // If Cognito bounces us with an OAuthCallback error, retry once automatically
-  useEffect(() => {
-    if (status === 'unauthenticated' && error === 'OAuthCallback' && !hasRetried.current) {
-      hasRetried.current = true
-      signIn('cognito', { callbackUrl: '/profiles' }, { identity_provider: 'Google' })
+    switch (error) {
+      case 'AccessDenied':
+        return 'Access was denied for this account. Try a different account or contact support if this seems wrong.'
+      case 'OAuthAccountNotLinked':
+        return 'This Google account is already linked to another login method. Try signing in with the original provider.'
+      case 'OAuthSignin':
+      case 'OAuthCreateAccount':
+      case 'EmailCreateAccount':
+      case 'Callback':
+      case 'CredentialsSignin':
+        return 'We couldn’t complete sign-in. Please try again in a moment.'
+      case 'OAuthCallback':
+        return 'We couldn’t complete sign-in. Please try again in a moment.'
+      default:
+        return 'Sign-in could not be completed. Please try again.'
     }
-  }, [status, error])
+  })()
 
-  // Keep the page blank while we silently retry to avoid flashing an error screen.
-  if (isRetrying || status === 'loading') {
-    return null
-  }
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/profiles')
+    }
+  }, [status, router])
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-gradient-to-b from-[#050013] via-[#050010] to-black px-4">
@@ -55,7 +54,7 @@ export default function LoginPage() {
         <CardContent className="space-y-3">
           <Button
             type="button"
-            className="w-full gap-2 border border-zinc-200/40 bg-zinc-50/10 text-zinc-50 backdrop-blur-lg hover:bg-zinc-50/20 hover:border-zinc-100/60"
+            className="w-full gap-2 border border-zinc-200/40 bg-zinc-50/10 text-zinc-50 backdrop-blur-1g hover:bg-zinc-50/20 hover:border-zinc-100/60"
             onClick={() =>
               signIn('cognito', { callbackUrl: '/profiles' }, { identity_provider: 'Google' })
             }

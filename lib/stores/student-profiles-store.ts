@@ -19,6 +19,12 @@ export type StudentStats = {
   topMatchIds?: string[]
 }
 
+export type StudentContextFile = {
+  id: string
+  name: string
+  label: string
+}
+
 export type StudentProfile = {
   id: string
   name: string
@@ -53,7 +59,18 @@ export type StudentProfile = {
   features: Record<DimensionId, number>
   stories: StudentStory[]
   baseStory?: string
+  contextFiles?: StudentContextFile[]
   stats: StudentStats
+}
+
+export const EMPTY_FEATURES: Record<DimensionId, number> = {
+  academics: 0,
+  leadership: 0,
+  community: 0,
+  need: 0,
+  innovation: 0,
+  research: 0,
+  adversity: 0,
 }
 
 const SEED_STUDENT_PROFILES: StudentProfile[] = [
@@ -108,6 +125,7 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
         dimensionTags: ['research', 'academics', 'innovation']
       }
     ],
+    contextFiles: [],
     stats: {
       scholarshipsMatched: 9,
       draftsGenerated: 12,
@@ -171,6 +189,7 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
         dimensionTags: ['community', 'adversity', 'leadership']
       }
     ],
+    contextFiles: [],
     stats: {
       scholarshipsMatched: 11,
       draftsGenerated: 15,
@@ -234,6 +253,7 @@ const SEED_STUDENT_PROFILES: StudentProfile[] = [
         dimensionTags: ['research', 'community', 'adversity']
       }
     ],
+    contextFiles: [],
     stats: {
       scholarshipsMatched: 13,
       draftsGenerated: 17,
@@ -251,17 +271,59 @@ type StudentProfileState = {
   updateProfile: (id: string, patch: Partial<StudentProfile>) => void
   removeProfile: (id: string) => void
   resetToSeed: () => void
+  loadMockProfiles: () => void
   setSelectedProfileId: (id: string | null) => void
+  isProfileComplete: (id: string | null) => boolean
+}
+
+const isComplete = (profile?: StudentProfile | null) => {
+  if (!profile) return false
+  if (!profile.name?.trim()) return false
+  if (!profile.university?.trim()) return false
+  if (!profile.program?.trim()) return false
+  if (!profile.year?.trim()) return false
+  if (profile.gpa == null) return false
+  return true
 }
 
 export const useStudentProfileStore = create<StudentProfileState>()(
   persist(
     (set, get) => ({
-      profiles: SEED_STUDENT_PROFILES,
-      selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null,
+      profiles: [],
+      selectedProfileId: null,
       addProfile: (data) => {
         const id = data.id ?? crypto.randomUUID()
-        const newProfile: StudentProfile = { ...data, id }
+        const newProfile: StudentProfile = {
+          id,
+          name: data.name ?? '',
+          program: data.program ?? '',
+          year: data.year ?? '',
+          tags: data.tags ?? [],
+          gpa: data.gpa,
+          gpaScale: data.gpaScale,
+          location: data.location,
+          university: data.university,
+          campus: data.campus,
+          degreeLevel: data.degreeLevel,
+          enrollmentStatus: data.enrollmentStatus,
+          citizenshipStatus: data.citizenshipStatus,
+          firstGen: data.firstGen,
+          languages: data.languages ?? [],
+          workStatus: data.workStatus,
+          financialNeedLevel: data.financialNeedLevel,
+          awards: data.awards ?? [],
+          testScores: data.testScores ?? {},
+          recommendedScholarshipIds: data.recommendedScholarshipIds ?? [],
+          features: data.features ?? { ...EMPTY_FEATURES },
+          stories: data.stories ?? [],
+          baseStory: data.baseStory,
+          contextFiles: data.contextFiles ?? [],
+          stats: data.stats ?? {
+            scholarshipsMatched: 0,
+            draftsGenerated: 0,
+            avgAlignment: 0,
+          },
+        }
         const profiles = [...get().profiles, newProfile]
         set({
           profiles,
@@ -286,12 +348,21 @@ export const useStudentProfileStore = create<StudentProfileState>()(
           selectedProfileId: nextSelected
         })
       },
+      loadMockProfiles: () =>
+        set({
+          profiles: SEED_STUDENT_PROFILES,
+          selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null
+        }),
       resetToSeed: () =>
         set({
           profiles: SEED_STUDENT_PROFILES,
           selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null
         }),
-      setSelectedProfileId: (id) => set({ selectedProfileId: id })
+      setSelectedProfileId: (id) => set({ selectedProfileId: id }),
+      isProfileComplete: (id) => {
+        const profile = get().profiles.find((p) => p.id === id) ?? null
+        return isComplete(profile)
+      }
     }),
     {
       name: 'agentiiv-student-profiles-v1',

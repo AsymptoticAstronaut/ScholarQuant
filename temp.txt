@@ -1,0 +1,190 @@
+
+    return DIMENSIONS.map((d) => ({
+      id: d.id,
+      label: d.label,
+      student: Math.round((studentFeatures[d.id] ?? 0) * 100),
+      scholarship: Math.round((typeShape[d.id] ?? 0) * 100),
+    }))
+  }, [selectedStudent, targetType])
+
+  const renderStarterPanel = () => {
+    const currentKey = steps[currentStep].key
+    const currentValue = starter[currentKey]
+    const wordCount = currentValue.trim() ? currentValue.trim().split(/\s+/).length : 0
+    const charCount = currentValue.length
+
+    return (
+      <div className="relative flex min-h-screen items-start justify-center bg-gradient-to-b from-zinc-950 via-zinc-950 to-black px-4 py-10 text-zinc-50 overflow-hidden">
+        <Card className="text-card-foreground relative z-10 w-full max-w-4xl overflow-hidden border border-zinc-800/70 bg-zinc-950/95 py-6 shadow-2xl shadow-black/40">
+          <CardHeader className="space-y-1.5">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Profiles</p>
+            <CardTitle className="text-2xl font-semibold text-zinc-50">Get started</CardTitle>
+            <CardDescription className="text-sm text-zinc-400">
+              Add your basics, then answer a few prompts. We’ll compose your base story. Or load a mock to see a demo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="relative grid gap-6 md:grid-cols-3">
+            <div className="pointer-events-none absolute inset-0 z-0">
+              <Spotlight className="from-purple-500/40 via-pink-400/20 to-purple-300/12 blur-2xl" size={180} />
+              <div className="absolute -left-12 top-8 h-56 w-56 rounded-full bg-purple-500/18 blur-3xl" />
+              <div className="absolute right-0 top-12 h-56 w-56 rounded-full bg-pink-500/18 blur-3xl" />
+              <div className="absolute bottom-0 left-1/3 h-60 w-60 rounded-full bg-fuchsia-500/16 blur-3xl" />
+            </div>
+            <div className="relative z-10 md:col-span-2 space-y-3">
+              {stage === 'basics1' && (
+                    <div className="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-900/70 p-4">
+                  <p className="text-sm font-medium text-zinc-50">Start with your name and school</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">Full name</label>
+                      <Input
+                        value={starter.name}
+                        onChange={onChange('name')}
+                        placeholder="Full name"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">University</label>
+                      <Input
+                        value={starter.university}
+                        onChange={onChange('university')}
+                        placeholder="University"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      className="bg-fuchsia-600 text-white hover:bg-fuchsia-500"
+                      onClick={() => setStage('basics2')}
+                      disabled={!starter.name.trim() || !starter.university.trim()}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {stage === 'basics2' && (
+                    <div className="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-900/70 p-4">
+                    <p className="text-sm font-medium text-zinc-50">Add program details</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-400">Program</label>
+                      <Input
+                        value={starter.program}
+                        onChange={onChange('program')}
+                        placeholder="Program"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">Year</label>
+                      <Input
+                        value={starter.year}
+                        onChange={onChange('year')}
+                        placeholder="Year (e.g., 3rd year)"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">GPA</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={starter.gpa}
+                        onChange={onChange('gpa')}
+                        placeholder="GPA"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-400">GPA scale</label>
+                      <Input
+                        type="number"
+                        step="1"
+                        value={starter.gpaScale}
+                        onChange={onChange('gpaScale')}
+                        placeholder="GPA scale (4, 12, 100)"
+                        className="h-9 border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                      />
+                    </div>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <Button
+                        variant="ghost"
+                        className="text-zinc-300 hover:bg-zinc-900"
+                        onClick={() => setStage('basics1')}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        className="bg-fuchsia-600 text-white hover:bg-fuchsia-500"
+                        onClick={() => setStage('questions')}
+                        disabled={!starter.program.trim() || !starter.year.trim() || starter.gpa === '' || starter.gpaScale === ''}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+              )}
+
+              {stage === 'questions' && (
+                <div className="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-900/70 p-4">
+                  <div className="flex items-center justify-between text-sm text-zinc-200">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Step {currentStep + 1} of {steps.length}</p>
+                      <p className="text-sm font-medium text-zinc-50">{steps[currentStep].label}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {steps.map((_, idx) => (
+                        <span
+                          key={idx}
+                          className={`h-2 w-2 rounded-full ${idx === currentStep ? 'bg-fuchsia-400' : 'bg-zinc-700'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                      <span>{steps[currentStep].placeholder}</span>
+                      <span>{wordCount} words • {charCount}/500 chars max</span>
+                    </div>
+                    <Textarea
+                      value={starter[steps[currentStep].key]}
+                      onChange={(e) => handleStepChange(e.target.value)}
+                      placeholder={steps[currentStep].placeholder}
+                      className="min-h-[140px] border-zinc-800 bg-zinc-900/80 text-sm text-zinc-100"
+                    />
+                    <div className="flex h-1 w-full overflow-hidden rounded-full bg-zinc-800">
+                      <div
+                        className="h-full bg-fuchsia-500 transition-all"
+                        style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <Button
+                      variant="ghost"
+                      className="text-zinc-300 hover:bg-zinc-900"
+                      onClick={() => setStage('basics2')}
+                    >
+                      Back
+                    </Button>
+                    <div className="flex gap-2">
+                    <Button
+                        className="bg-fuchsia-600 text-white hover:bg-fuchsia-500"
+                      onClick={() => handleAdvance()}
+                      disabled={
+                        !starter.name.trim() ||
+                        !starter.university.trim() ||
+                        !starter[steps[currentStep].key].trim()
+                      }
+                    >
+                      {currentStep === steps.length - 1 ? 'Create my profile' : 'Next'}
+                    </Button>
+                  </div>
+                </div>
+                </div>
+              )}

@@ -1,9 +1,10 @@
-'use client'
+"use client"
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, LogOut } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { signOut } from 'next-auth/react'
 
 export function Header() {
   const pathname = usePathname()
@@ -12,8 +13,12 @@ export function Header() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true)
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [mounted, setMounted] = useState(false)
+  const [showHeader, setShowHeader] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+    setShowHeader(true)
+  }, [])
 
   // detect mobile viewport (client only)
   useEffect(() => {
@@ -76,12 +81,13 @@ export function Header() {
   // header appearance: keep subtle translucent background; overlay will blur when open
   const leftOffsetClass = sidebarOpen ? 'md:left-64 left-0' : 'md:left-0 left-0'
   const bgClass = 'bg-white/30 dark:bg-zinc-950/30' // slightly more translucent to show blur
+  const revealClass = showHeader ? 'translate-y-0' : '-translate-y-full pointer-events-none'
 
   return (
     <header
       // Added backdrop blur classes + inline styles for Safari & fallback
       style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
-      className={`fixed top-0 z-40 h-14 flex items-center transition-all duration-300 ${leftOffsetClass} right-0 ${bgClass} px-0 md:px-10 backdrop-blur-md`}
+      className={`fixed top-0 z-40 h-14 flex items-center transition-all duration-300 ${leftOffsetClass} right-0 ${bgClass} px-0 md:px-10 backdrop-blur-md ${revealClass}`}
     >
       {/* left-aligned: toggle + title */}
       <div className="flex items-center gap-3 pl-2">
@@ -121,16 +127,24 @@ export function Header() {
         </span>
       </div>
 
-      {/* right: mobile-only theme toggle (render after mount to avoid hydration mismatch) */}
-      <div className="ml-auto pr-2">
+      <div className="ml-auto flex items-center gap-2 pr-2">
         {mounted ? (
-          <button
-            onClick={toggleTheme}
-            className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="h-5 w-5 text-zinc-100" /> : <Moon className="h-5 w-5 text-zinc-800" />}
-          </button>
+          <>
+            <button
+              onClick={toggleTheme}
+              className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5 text-zinc-100" /> : <Moon className="h-5 w-5 text-zinc-800" />}
+            </button>
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="hidden md:inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </>
         ) : (
           <div className="md:hidden h-5 w-5" aria-hidden />
         )}
