@@ -205,6 +205,7 @@ type StudentProfileState = {
   loading: boolean
   hasFetched: boolean
   error: string | null
+  _debounceTimers: Map<string, ReturnType<typeof setTimeout>>
   addProfile: (data: Omit<StudentProfile, 'id'> & { id?: string }) => void
   updateProfile: (id: string, patch: Partial<StudentProfile>) => void
   removeProfile: (id: string) => void
@@ -223,6 +224,8 @@ export const useStudentProfileStore = create<StudentProfileState>()(
       loading: false,
       hasFetched: false,
       error: null,
+      // Debounce queue for profile updates to avoid patching on every keystroke.
+      _debounceTimers: new Map<string, ReturnType<typeof setTimeout>>(),
       addProfile: (data) => {
         const payload = {
           ...data,
@@ -257,27 +260,45 @@ export const useStudentProfileStore = create<StudentProfileState>()(
           .finally(() => set({ loading: false }))
       },
       updateProfile: (id, patch) => {
-        set({ loading: true, error: null })
+        set({ error: null })
 
-        fetch(`/api/profiles/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(patch),
-        })
-          .then(async (res) => {
-            if (!res.ok) throw new Error(await res.text())
-            return res.json() as Promise<StudentProfile>
+        // Merge patches and debounce network calls to avoid hammering the API on each keystroke.
+        const pending = get()._debounceTimers.get(id)
+        if (pending) {
+          clearTimeout(pending)
+        }
+
+        const timer = setTimeout(() => {
+          set({ loading: true })
+          fetch(`/api/profiles/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
           })
-          .then((updated) => {
-            set({
-              profiles: get().profiles.map((p) =>
-                p.id === id ? { ...p, ...updated } : p
-              ),
+            .then(async (res) => {
+              if (!res.ok) throw new Error(await res.text())
+              return res.json() as Promise<StudentProfile>
             })
-          })
-          .catch((err) => set({ error: err.message }))
-          .finally(() => set({ loading: false }))
+            .then((updated) => {
+              set({
+                profiles: get().profiles.map((p) =>
+                  p.id === id ? { ...p, ...updated } : p
+                ),
+              })
+            })
+            .catch((err) => set({ error: err.message }))
+            .finally(() => set({ loading: false }))
+        }, 500)
+
+        get()._debounceTimers.set(id, timer)
+
+        // Optimistic local update.
+        set({
+          profiles: get().profiles.map((p) =>
+            p.id === id ? { ...p, ...patch } : p
+          ),
+        })
       },
       removeProfile: (id) => {
         set({ loading: true, error: null })
