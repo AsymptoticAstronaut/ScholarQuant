@@ -33,7 +33,7 @@ import { NebulaBackdrop } from '@/components/ui/nebula-backdrop'
 
 import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 import type { DimensionId } from '@/types/dimensions'
-import { EMPTY_FEATURES, type StudentProfile } from '@/types/student-profile'
+import { EMPTY_FEATURES, type StudentProfile, type StudentStory } from '@/types/student-profile'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
@@ -135,6 +135,7 @@ export default function StudentProfilesPage() {
   const updateProfile = useStudentProfileStore((s) => s.updateProfile)
   const addProfile = useStudentProfileStore((s) => s.addProfile)
   const loadMockProfiles = useStudentProfileStore((s) => s.loadMockProfiles)
+  const removeProfile = useStudentProfileStore((s) => s.removeProfile)
   const selectedProfileId = useStudentProfileStore((s) => s.selectedProfileId)
   const setSelectedProfileId = useStudentProfileStore((s) => s.setSelectedProfileId)
   const searchParams = useSearchParams()
@@ -238,6 +239,51 @@ export default function StudentProfilesPage() {
     if (!value.trim()) return undefined
     const num = parseFloat(value)
     return Number.isFinite(num) ? num : undefined
+  }
+
+  const buildStoriesFromStarter = (): StudentStory[] => {
+    const stories: StudentStory[] = []
+    const idBase = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+
+    if (starter.leadership || starter.challenges || starter.motivations) {
+      const dims: DimensionId[] = []
+      if (starter.leadership) dims.push('leadership', 'community')
+      if (starter.challenges) dims.push('adversity', 'need')
+      if (!dims.length) dims.push('community')
+
+      stories.push({
+        id: `${idBase}-impact`,
+        title: starter.leadership ? 'Leadership & community impact' : 'Impact under constraints',
+        summary: [
+          starter.leadership?.trim(),
+          starter.challenges?.trim(),
+          starter.motivations?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' '),
+        dimensionTags: Array.from(new Set(dims)),
+      })
+    }
+
+    if (starter.academics || starter.goals || starter.program) {
+      const dims: DimensionId[] = ['academics']
+      dims.push('innovation')
+      if (starter.program) dims.push('research')
+      stories.push({
+        id: `${idBase}-academics`,
+        title: starter.academics ? 'Academic highlight' : 'Academic direction',
+        summary: [
+          starter.academics?.trim(),
+          starter.program?.trim(),
+          starter.goals?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' '),
+        dimensionTags: Array.from(new Set(dims)),
+      })
+    }
+
+    return stories.slice(0, 2)
   }
 
   const normalizeFeatures = (features: Record<string, number> | undefined) => {
@@ -480,6 +526,7 @@ export default function StudentProfilesPage() {
       const nextBaseStory = aiData.baseStory?.trim() || composeBaseStory() || undefined
       const nextFeatures = normalizeFeatures(aiData.features)
       const nextStats = normalizeStats(aiData.stats)
+      const starterStories = buildStoriesFromStarter()
 
       const created = await addProfile({
         name: starter.name.trim(),
@@ -490,7 +537,7 @@ export default function StudentProfilesPage() {
         gpaScale,
         tags: Array.isArray(aiData.tags) ? aiData.tags : [],
         features: nextFeatures,
-        stories: [],
+        stories: starterStories,
         recommendedScholarshipIds: Array.isArray(aiData.recommendedScholarshipIds)
           ? aiData.recommendedScholarshipIds
           : [],
@@ -883,7 +930,7 @@ export default function StudentProfilesPage() {
     <motion.div
       className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#050013] via-[#050010] to-black text-zinc-50"
       variants={VARIANTS_CONTAINER}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       <NebulaBackdrop />
@@ -958,14 +1005,28 @@ export default function StudentProfilesPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-[11px] text-zinc-400">
                         <span>Select a profile</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 border-fuchsia-500/70 bg-zinc-950/70 px-2 text-[11px] text-fuchsia-100 hover:bg-fuchsia-900/40"
-                          onClick={() => setShowQuickCreate(true)}
-                        >
-                          + New
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 border-fuchsia-500/70 bg-zinc-950/70 px-2 text-[11px] text-fuchsia-100 hover:bg-fuchsia-900/40"
+                            onClick={() => setShowQuickCreate(true)}
+                          >
+                            + New
+                          </Button>
+                          {selectedStudent ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 border border-rose-500/70 bg-rose-950/50 px-2 text-[11px] text-rose-100 hover:bg-rose-900/60"
+                              onClick={() => {
+                                removeProfile(selectedStudent.id)
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="flex max-h-52 flex-col gap-1.5 overflow-y-auto pr-1 text-[11px]">
                         {profiles.map((student) => (

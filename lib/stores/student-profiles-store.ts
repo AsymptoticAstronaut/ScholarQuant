@@ -318,9 +318,14 @@ export const useStudentProfileStore = create<StudentProfileState>()(
           .finally(() => set({ loading: false }))
       },
       loadMockProfiles: () =>
-        set({
-          profiles: SEED_STUDENT_PROFILES,
-          selectedProfileId: SEED_STUDENT_PROFILES[0]?.id ?? null
+        set((state) => {
+          const existing = state.profiles
+          const toAdd = SEED_STUDENT_PROFILES.filter(
+            (seed) => !existing.some((p) => p.id === seed.id)
+          )
+          const profiles = [...existing, ...toAdd]
+          const selectedProfileId = state.selectedProfileId ?? profiles[0]?.id ?? null
+          return { profiles, selectedProfileId }
         }),
       resetToSeed: () =>
         set({
