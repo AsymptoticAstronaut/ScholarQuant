@@ -10,7 +10,7 @@ const DEMO_DRAFT =
 
 In the first pilot, I worked with teachers to identify where students were getting stuck—mostly at the moment a concept turned into a circuit or a line of code. I iterated on the kit design three times to reduce setup time and failure points, and built short lesson modules that connected each build step to a real-world purpose. Participation in the program grew steadily, and by the final workshop series we had more than doubled the number of students who completed a full build and demo.
 
-This project shaped how I approach technical work: start with a concrete problem, test quickly, learn from failure, and make sure the result is usable by others. I’ve carried that mindset into my undergraduate research in swarm robotics, where I improved coordination reliability by tightening sensor-drift filtering and validating changes across repeated trials. The same pattern holds—clarity of problem framing, disciplined iteration, and measurable improvement.
+This project shaped how I approach technical work: start with a concrete problem, test quickly, learn from failure, and make sure the result is usable by others. I have carried that mindset into my undergraduate research in swarm robotics, where I improved coordination reliability by tightening sensor-drift filtering and validating changes across repeated trials. The same pattern holds—clarity of problem framing, disciplined iteration, and measurable improvement.
 
 I’m applying for this scholarship because it aligns with both my academic direction and my commitment to building engineering access. I want to keep developing systems that are rigorous in method but accessible in impact, and to scale learning tools that help more students see themselves as builders.`
 
