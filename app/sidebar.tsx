@@ -134,16 +134,16 @@ export function Sidebar() {
         <div className="relative h-full w-full overflow-hidden">
           {/* Nebula background (slightly dimmer; shapes unchanged) */}
           <div className="pointer-events-none absolute inset-0 z-0 opacity-70 dark:opacity-60">
-            {/* unified wash with slightly lower intensity */}
-            <div className="absolute inset-0 bg-[radial-gradient(95%_85%_at_0%_0%,rgba(16,185,129,0.14),transparent_58%),radial-gradient(105%_90%_at_100%_12%,rgba(56,189,248,0.14),transparent_60%),radial-gradient(115%_95%_at_42%_100%,rgba(129,140,248,0.12),transparent_62%),radial-gradient(85%_75%_at_60%_40%,rgba(217,70,239,0.11),transparent_64%)]" />
+            {/* nebula wash shifted cooler to reduce salmon cast */}
+            <div className="absolute inset-0 bg-[radial-gradient(95%_85%_at_0%_0%,rgba(147,51,234,0.16),transparent_60%),radial-gradient(105%_90%_at_100%_12%,rgba(59,130,246,0.18),transparent_60%),radial-gradient(115%_95%_at_42%_100%,rgba(99,102,241,0.16),transparent_64%),radial-gradient(85%_75%_at_60%_40%,rgba(14,165,233,0.16),transparent_66%)]" />
 
-            {/* soft clouds: reduced alpha only */}
-            <div className="absolute -left-6 top-16 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.32),transparent_60%)] blur-[56px]" />
-            <div className="absolute right-[-40px] top-28 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.30),transparent_62%)] blur-[60px]" />
-            <div className="absolute bottom-[-56px] left-8 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(217,70,239,0.27),transparent_64%)] blur-[66px]" />
-            <div className="absolute bottom-10 right-6 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(129,140,248,0.25),transparent_62%)] blur-[54px]" />
-            {/* extra faint teal-green lift, dimmer */}
-            <div className="absolute top-1/2 left-1/3 h-44 w-44 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(45,212,191,0.12),transparent_67%)] blur-[70px]" />
+            {/* soft clouds with violet/blue bias */}
+            <div className="absolute -left-6 top-16 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(147,51,234,0.3),transparent_58%)] blur-[56px]" />
+            <div className="absolute right-[-40px] top-28 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.32),transparent_62%)] blur-[60px]" />
+            <div className="absolute bottom-[-56px] left-8 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.3),transparent_64%)] blur-[66px]" />
+            <div className="absolute bottom-10 right-6 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.28),transparent_62%)] blur-[54px]" />
+            {/* faint teal lift to keep depth */}
+            <div className="absolute top-1/2 left-1/3 h-44 w-44 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(6,182,212,0.16),transparent_67%)] blur-[70px]" />
           </div>
 
           {/* Header */}
