@@ -205,7 +205,9 @@ type StudentProfileState = {
   loading: boolean
   hasFetched: boolean
   error: string | null
-  addProfile: (data: Omit<StudentProfile, 'id'> & { id?: string }) => void
+  addProfile: (
+    data: Omit<StudentProfile, 'id'> & { id?: string }
+  ) => Promise<StudentProfile | null>
   updateProfile: (id: string, patch: Partial<StudentProfile>) => Promise<void>
   removeProfile: (id: string) => void
   resetToSeed: () => void
@@ -238,7 +240,7 @@ export const useStudentProfileStore = create<StudentProfileState>()(
 
         set({ loading: true, error: null })
 
-        fetch('/api/profiles', {
+        return fetch('/api/profiles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -252,8 +254,12 @@ export const useStudentProfileStore = create<StudentProfileState>()(
             const profiles = [...get().profiles, created]
             const selectedProfileId = get().selectedProfileId ?? created.id
             set({ profiles, selectedProfileId })
+            return created
           })
-          .catch((err) => set({ error: err.message }))
+          .catch((err) => {
+            set({ error: err.message })
+            return null
+          })
           .finally(() => set({ loading: false }))
       },
       updateProfile: async (id, patch) => {

@@ -63,8 +63,23 @@ const DIMENSIONS: Dimension[] = [
 ]
 
 type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
+type StarterFile = { id: string; name: string; label: string; file: File; previewText: string }
 
 const SCHOLARSHIP_TYPES: ScholarshipType[] = ['Merit', 'Community', 'STEM', 'Access']
+
+const STARTER_DEFAULT = {
+  name: '',
+  university: '',
+  program: '',
+  year: '',
+  gpa: '',
+  gpaScale: '4',
+  motivations: '',
+  academics: '',
+  leadership: '',
+  challenges: '',
+  goals: '',
+}
 
 function typeLabel(t: ScholarshipType) {
   const map: Record<ScholarshipType, string> = {
@@ -129,30 +144,20 @@ export default function StudentProfilesPage() {
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const [stage, setStage] = useState<'basics1' | 'basics2' | 'questions'>('basics1')
-  const [starter, setStarter] = useState({
-    name: '',
-    university: '',
-    program: '',
-    year: '',
-    gpa: '',
-    gpaScale: '4',
-    motivations: '',
-    academics: '',
-    leadership: '',
-    challenges: '',
-    goals: '',
-  })
+  const [starter, setStarter] = useState({ ...STARTER_DEFAULT })
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingFileLabel, setPendingFileLabel] = useState('')
-  const [uploadedFiles, setUploadedFiles] = useState<
-    { id: string; name: string; label: string }[]
-  >([])
+  const [uploadedFiles, setUploadedFiles] = useState<StarterFile[]>([])
   const [profilePendingFile, setProfilePendingFile] = useState<File | null>(null)
   const [profileFileLabel, setProfileFileLabel] = useState('')
   const [profileFileLoading, setProfileFileLoading] = useState(false)
   const [profileFileError, setProfileFileError] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [creatingProfile, setCreatingProfile] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [regenLoading, setRegenLoading] = useState(false)
+  const [regenError, setRegenError] = useState<string | null>(null)
 
   const steps = [
     {
@@ -235,6 +240,31 @@ export default function StudentProfilesPage() {
     return Number.isFinite(num) ? num : undefined
   }
 
+  const normalizeFeatures = (features: Record<string, number> | undefined) => {
+    const safe: Record<DimensionId, number> = { ...EMPTY_FEATURES }
+    Object.entries(features ?? {}).forEach(([key, val]) => {
+      if (key in safe && typeof val === 'number' && Number.isFinite(val)) {
+        safe[key as DimensionId] = Math.min(1, Math.max(0, val))
+      }
+    })
+    return safe
+  }
+
+  const normalizeStats = (stats: any): StudentProfile['stats'] => ({
+    scholarshipsMatched:
+      typeof stats?.scholarshipsMatched === 'number' && stats.scholarshipsMatched >= 0
+        ? Math.round(stats.scholarshipsMatched)
+        : 0,
+    draftsGenerated:
+      typeof stats?.draftsGenerated === 'number' && stats.draftsGenerated >= 0
+        ? Math.round(stats.draftsGenerated)
+        : 0,
+    avgAlignment:
+      typeof stats?.avgAlignment === 'number' && stats.avgAlignment >= 0
+        ? Math.min(100, Math.round(stats.avgAlignment))
+        : 0,
+  })
+
   const onChange =
     (field: keyof typeof starter) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -253,14 +283,18 @@ export default function StudentProfilesPage() {
     setStarter((prev) => ({ ...prev, [key]: nextVal }))
   }
 
-  const handleAddFile = () => {
+  const handleAddFile = async () => {
     if (!pendingFile || !pendingFileLabel.trim()) return
+    const textContent = await pendingFile.text()
+    const previewText = textContent.slice(0, 4000)
     setUploadedFiles((prev) => [
       ...prev,
       {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: pendingFile.name,
         label: pendingFileLabel.trim(),
+        file: pendingFile,
+        previewText,
       },
     ])
     setPendingFile(null)
@@ -322,7 +356,9 @@ export default function StudentProfilesPage() {
     }
   }
 
-  const handleAdvance = () => {
+  const handleAdvance = async () => {
+    if (creatingProfile) return
+
     if (stage === 'basics1') {
       if (!starter.name.trim() || !starter.university.trim()) return
       setStage('basics2')
@@ -345,7 +381,7 @@ export default function StudentProfilesPage() {
       setCurrentStep((s) => Math.min(steps.length - 1, s + 1))
       return
     }
-    createProfileFromStarter()
+    await createProfileFromStarter()
   }
 
   const composeBaseStory = () => {
@@ -359,37 +395,125 @@ export default function StudentProfilesPage() {
     return parts.join(' ')
   }
 
-  const createProfileFromStarter = () => {
-    addProfile({
-      name: starter.name.trim(),
-      university: starter.university.trim(),
-      program: starter.program.trim(),
-      year: starter.year.trim(),
-      gpa: parseGpa(starter.gpa),
-      gpaScale: starter.gpaScale
-        ? (parseInt(starter.gpaScale, 10) as 4 | 12 | 100)
-        : undefined,
-      tags: [],
-      features: { ...EMPTY_FEATURES },
-      stories: [],
-      recommendedScholarshipIds: [],
-      baseStory: composeBaseStory() || undefined,
-      stats: { scholarshipsMatched: 0, draftsGenerated: 0, avgAlignment: 0 },
-    })
-    setStarter({
-      name: '',
-      university: '',
-      program: '',
-      year: '',
-      gpa: '',
-      gpaScale: '4',
-      motivations: '',
-      academics: '',
-      leadership: '',
-      challenges: '',
-      goals: '',
-    })
-    setShowQuickCreate(false)
+  const resetStarterForm = () => {
+    setStarter({ ...STARTER_DEFAULT })
+    setPendingFile(null)
+    setPendingFileLabel('')
+    setUploadedFiles([])
+    setCurrentStep(0)
+    setStage('basics1')
+  }
+
+  const uploadContextFiles = async (profileId: string, files: StarterFile[]) => {
+    if (!files.length) return
+    let latestFiles: StudentProfile['contextFiles'] | null = null
+
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('file', file.file)
+      formData.append('label', file.label)
+
+      const res = await fetch(`/api/profiles/${profileId}/files`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        throw new Error(await res.text())
+      }
+      latestFiles = (await res.json()) as StudentProfile['contextFiles']
+    }
+
+    if (latestFiles) {
+      useStudentProfileStore.setState((state) => ({
+        profiles: state.profiles.map((p) =>
+          p.id === profileId ? { ...p, contextFiles: latestFiles ?? [] } : p
+        ),
+      }))
+    }
+  }
+
+  const createProfileFromStarter = async () => {
+    const gpa = parseGpa(starter.gpa)
+    const gpaScale = starter.gpaScale ? (parseInt(starter.gpaScale, 10) as 4 | 12 | 100) : undefined
+    setCreateError(null)
+    setCreatingProfile(true)
+
+    try {
+      const response = await fetch('/api/profiles/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          basics: {
+            name: starter.name.trim(),
+            university: starter.university.trim(),
+            program: starter.program.trim(),
+            year: starter.year.trim(),
+            gpa,
+            gpaScale,
+          },
+          answers: {
+            motivations: starter.motivations,
+            academics: starter.academics,
+            leadership: starter.leadership,
+            challenges: starter.challenges,
+            goals: starter.goals,
+          },
+          files: uploadedFiles.map((f) => ({
+            name: f.name,
+            label: f.label,
+            text: f.previewText,
+          })),
+        }),
+      })
+
+      const aiData = (await response.json()) as Partial<StudentProfile> & {
+        error?: string
+      }
+
+      if (!response.ok) {
+        throw new Error(aiData?.error ?? 'Failed to generate profile')
+      }
+
+      const nextBaseStory = aiData.baseStory?.trim() || composeBaseStory() || undefined
+      const nextFeatures = normalizeFeatures(aiData.features)
+      const nextStats = normalizeStats(aiData.stats)
+
+      const created = await addProfile({
+        name: starter.name.trim(),
+        university: starter.university.trim(),
+        program: starter.program.trim(),
+        year: starter.year.trim(),
+        gpa,
+        gpaScale,
+        tags: Array.isArray(aiData.tags) ? aiData.tags : [],
+        features: nextFeatures,
+        stories: [],
+        recommendedScholarshipIds: Array.isArray(aiData.recommendedScholarshipIds)
+          ? aiData.recommendedScholarshipIds
+          : [],
+        baseStory: nextBaseStory,
+        stats: nextStats,
+      })
+
+      if (!created) {
+        throw new Error('Profile could not be saved')
+      }
+
+      // Upload any supporting files to S3 and sync local store
+      if (uploadedFiles.length > 0) {
+        await uploadContextFiles(created.id, uploadedFiles)
+      }
+
+      resetStarterForm()
+      setShowQuickCreate(false)
+    } catch (err: any) {
+      setCreateError(err?.message ?? 'Could not create profile')
+    } finally {
+      setCreatingProfile(false)
+    }
   }
 
   const radarData = useMemo(() => {
@@ -542,17 +666,30 @@ export default function StudentProfilesPage() {
                       <div className="flex gap-2">
                         <Button
                           className="border border-fuchsia-300/60 bg-fuchsia-500/15 text-fuchsia-50 backdrop-blur-md hover:bg-fuchsia-500/25 hover:border-fuchsia-200/80"
-                          onClick={handleAdvance}
+                          onClick={() => void handleAdvance()}
                           disabled={
                             !starter.name.trim() ||
                             !starter.university.trim() ||
-                            !starter[steps[currentStep].key].trim()
+                            !starter[steps[currentStep].key].trim() ||
+                            creatingProfile
                           }
                         >
-                          {currentStep === steps.length - 1 ? 'Create my profile' : 'Next'}
+                          {currentStep === steps.length - 1 ? (
+                            <div className="flex items-center gap-2">
+                              {creatingProfile ? (
+                                <span className="h-3 w-3 animate-spin rounded-full border border-fuchsia-200/70 border-t-transparent" />
+                              ) : null}
+                              <span>{creatingProfile ? 'Creating profile...' : 'Create my profile'}</span>
+                            </div>
+                          ) : (
+                            'Next'
+                          )}
                         </Button>
                       </div>
                     </div>
+                    {createError ? (
+                      <p className="text-[11px] text-rose-200">{createError}</p>
+                    ) : null}
                   </div>
                 )}
 
@@ -621,7 +758,7 @@ export default function StudentProfilesPage() {
                       type="button"
                       size="sm"
                       className="h-8 border border-fuchsia-300/60 bg-fuchsia-500/15 px-3 text-[11px] text-fuchsia-50 backdrop-blur-md hover:bg-fuchsia-500/25 hover:border-fuchsia-200/80"
-                      onClick={handleAddFile}
+                      onClick={() => void handleAddFile()}
                       disabled={!pendingFile || !pendingFileLabel.trim()}
                     >
                       Add file
@@ -690,6 +827,56 @@ export default function StudentProfilesPage() {
   const handleBaseStoryChange = (value: string) => {
     setBaseStoryDraft(value)
     setPendingSave(true)
+  }
+
+  const handleRegenerateBaseStory = async () => {
+    if (!selectedStudent || regenLoading) return
+    setRegenError(null)
+    setRegenLoading(true)
+    try {
+      const response = await fetch('/api/profiles/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          baseStory: baseStoryDraft.trim() || selectedStudent.baseStory || '',
+          basics: {
+            name: selectedStudent.name,
+            university: selectedStudent.university,
+            program: selectedStudent.program,
+            year: selectedStudent.year,
+            gpa: selectedStudent.gpa,
+            gpaScale: selectedStudent.gpaScale,
+          },
+          files: (selectedStudent.contextFiles ?? []).map((f) => ({
+            name: f.name,
+            label: f.label,
+          })),
+        }),
+      })
+
+      const data = (await response.json()) as Partial<StudentProfile> & { error?: string }
+      if (!response.ok) {
+        throw new Error(data?.error ?? 'Failed to regenerate')
+      }
+
+      const nextBase = data.baseStory?.trim() || baseStoryDraft
+      setBaseStoryDraft(nextBase)
+      await updateProfile(selectedStudent.id, {
+        baseStory: nextBase,
+        features: data.features ? normalizeFeatures(data.features as any) : selectedStudent.features,
+        recommendedScholarshipIds: Array.isArray(data.recommendedScholarshipIds)
+          ? data.recommendedScholarshipIds
+          : selectedStudent.recommendedScholarshipIds,
+        stats: data.stats ? normalizeStats(data.stats) : selectedStudent.stats,
+      })
+      setPendingSave(false)
+      setLastSavedAt(new Date().toISOString())
+    } catch (err: any) {
+      setRegenError(err?.message ?? 'Could not regenerate story')
+    } finally {
+      setRegenLoading(false)
+    }
   }
 
   return (
@@ -936,11 +1123,29 @@ export default function StudentProfilesPage() {
                       placeholder="Write a single, reusable story that captures background, goals, and key experiences. Draft Studio will tailor this for each scholarship."
                       className="border-zinc-700 bg-zinc-950/80 text-xs text-zinc-100"
                     />
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 border border-emerald-400/60 bg-emerald-500/15 px-3 text-[11px] text-emerald-100 hover:bg-emerald-500/25 hover:border-emerald-300/80"
+                <div className="flex justify-end">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border border-zinc-700 bg-zinc-950/70 px-3 text-[11px] text-zinc-100 hover:bg-zinc-900"
+                      disabled={regenLoading || profileFileLoading}
+                      onClick={() => void handleRegenerateBaseStory()}
+                    >
+                      {regenLoading ? (
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 animate-spin rounded-full border border-zinc-300/80 border-t-transparent" />
+                          <span>Regenerating</span>
+                        </div>
+                      ) : (
+                        'Regenerate'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 border border-emerald-400/60 bg-emerald-500/15 px-3 text-[11px] text-emerald-100 hover:bg-emerald-500/25 hover:border-emerald-300/80"
                         disabled={!pendingSave}
                         onClick={async () => {
                           if (!selectedStudent) return
@@ -960,11 +1165,15 @@ export default function StudentProfilesPage() {
                             setPendingSave(true)
                           }
                         }}
-                      >
-                        Save changes
-                      </Button>
-                    </div>
+                    >
+                      Save changes
+                    </Button>
                   </div>
+                </div>
+                {regenError ? (
+                  <p className="text-[11px] text-rose-200">{regenError}</p>
+                ) : null}
+              </div>
 
                   <div className="space-y-2">
                     <label className="text-[11px] text-zinc-300">Context files</label>
