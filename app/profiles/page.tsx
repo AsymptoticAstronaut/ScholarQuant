@@ -982,10 +982,10 @@ export default function StudentProfilesPage() {
             >
               <Card className="relative overflow-hidden border-zinc-800/80 bg-zinc-950/75 backdrop-blur-sm">
                 <div className="pointer-events-none absolute inset-0 z-0 opacity-90">
-                  <div className="absolute inset-0 bg-[radial-gradient(95%_85%_at_0%_0%,rgba(168,85,247,0.26),transparent_60%),radial-gradient(105%_90%_at_100%_15%,rgba(236,72,153,0.26),transparent_60%),radial-gradient(115%_95%_at_42%_100%,rgba(59,130,246,0.22),transparent_64%),radial-gradient(85%_75%_at_60%_40%,rgba(244,114,182,0.22),transparent_66%)]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(95%_85%_at_0%_0%,rgba(168,85,247,0.18),transparent_60%),radial-gradient(105%_90%_at_100%_15%,rgba(236,72,153,0.18),transparent_60%),radial-gradient(115%_95%_at_42%_100%,rgba(59,130,246,0.15),transparent_64%),radial-gradient(85%_75%_at_60%_40%,rgba(244,114,182,0.16),transparent_66%)]" />
                 </div>
                 <Spotlight
-                  className="pointer-events-none from-fuchsia-500/35 via-purple-500/25 to-sky-300/18 blur-3xl"
+                  className="pointer-events-none from-fuchsia-500/25 via-purple-500/18 to-sky-300/12 blur-3xl"
                   size={240}
                 />
 
@@ -1009,7 +1009,7 @@ export default function StudentProfilesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 border-fuchsia-500/70 bg-zinc-950/70 px-2 text-[11px] text-fuchsia-100 hover:bg-fuchsia-900/40"
+                            className="h-6 border-fuchsia-500/50 bg-zinc-950/75 px-2 text-[11px] text-fuchsia-100 hover:bg-fuchsia-900/30"
                             onClick={() => setShowQuickCreate(true)}
                           >
                             + New
@@ -1038,7 +1038,7 @@ export default function StudentProfilesPage() {
                             }}
                             className={`flex w-full flex-col items-start rounded-lg border px-2.5 py-2.5 text-left transition ${
                               selectedStudent.id === student.id
-                                ? 'border-fuchsia-500/80 bg-fuchsia-950/60 text-fuchsia-50'
+                                ? 'border-fuchsia-500/50 bg-fuchsia-950/50 text-fuchsia-100'
                                 : 'border-zinc-700/70 bg-zinc-950/80 text-zinc-300 hover:bg-zinc-900'
                             }`}
                           >
@@ -1160,7 +1160,7 @@ export default function StudentProfilesPage() {
                               <Badge
                                 key={dimId}
                                 variant="outline"
-                                className="border-fuchsia-500/70 bg-fuchsia-950/40 px-1.5 py-0.5 text-[10px] text-fuchsia-100"
+                                className="border-fuchsia-500/50 bg-fuchsia-950/35 px-1.5 py-0.5 text-[10px] text-fuchsia-100"
                               >
                                 {dim.label}
                               </Badge>
@@ -1250,7 +1250,7 @@ export default function StudentProfilesPage() {
                           <Badge
                             key={file.id}
                             variant="outline"
-                            className="flex items-center gap-1 border-fuchsia-500/70 bg-fuchsia-950/40 px-2 py-0.5 text-[10px] text-fuchsia-100"
+                            className="flex items-center gap-1 border-fuchsia-500/50 bg-fuchsia-950/35 px-2 py-0.5 text-[10px] text-fuchsia-100"
                           >
                             <span className="font-medium">{file.label}</span>
                             <span className="ml-1 text-[10px] text-fuchsia-200/80">
@@ -1286,7 +1286,7 @@ export default function StudentProfilesPage() {
                         />
                         <label
                           htmlFor="profile-context-file"
-                          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-fuchsia-300/60 bg-fuchsia-500/15 px-3 py-1.5 text-[11px] text-fuchsia-50 backdrop-blur-md hover:bg-fuchsia-500/25 hover:border-fuchsia-200/80"
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-fuchsia-300/40 bg-fuchsia-500/10 px-3 py-1.5 text-[11px] text-fuchsia-100 backdrop-blur-md hover:bg-fuchsia-500/18 hover:border-fuchsia-200/60"
                         >
                           <Upload className="h-3 w-3" />
                           <span>Upload</span>
@@ -1308,7 +1308,7 @@ export default function StudentProfilesPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="h-8 border border-fuchsia-300/60 bg-fuchsia-500/15 px-3 text-[11px] text-fuchsia-50 backdrop-blur-md hover:bg-fuchsia-500/25 hover:border-fuchsia-200/80"
+                        className="h-8 border border-fuchsia-300/40 bg-fuchsia-500/10 px-3 text-[11px] text-fuchsia-100 backdrop-blur-md hover:bg-fuchsia-500/18 hover:border-fuchsia-200/60"
                         onClick={handleProfileAddFile}
                         disabled={profileFileLoading || !profilePendingFile || !profileFileLabel.trim()}
                       >
