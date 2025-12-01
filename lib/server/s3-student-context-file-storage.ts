@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3'
 
 import type { StudentContextFileStorage } from '@/lib/domain/student-profile-repository'
 import type { StudentContextFile } from '@/types/student-profile'
@@ -32,7 +37,7 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
     this.bucket = bucket
   }
 
-  async listFiles(): Promise<StudentContextFile[]> {
+  async listFiles(_: string, __: string): Promise<StudentContextFile[]> {
     // We store metadata in Postgres; the API routes return that directly.
     return []
   }
@@ -81,6 +86,33 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
     )
   }
 
+  async getFile(
+    userId: string,
+    profileId: string,
+    fileId: string
+  ): Promise<{ body: Uint8Array; contentType?: string; fileName?: string }> {
+    const key = `${userId}/${profileId}/${fileId}`
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      })
+    )
+
+    const body = await result.Body?.transformToByteArray()
+    if (!body) {
+      throw new Error('File not found or empty')
+    }
+
+    const fileName = result.Metadata?.filename || undefined
+
+    return {
+      body,
+      contentType: result.ContentType || undefined,
+      fileName,
+    }
+  }
+
   private extractName(file: Blob | ArrayBuffer): string | undefined {
     if (file instanceof ArrayBuffer) return undefined
     // @ts-expect-error File name exists in runtime File, but TS only knows Blob here
@@ -92,4 +124,3 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
     return file.type || undefined
   }
 }
-

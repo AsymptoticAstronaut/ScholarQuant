@@ -20,6 +20,31 @@ const getUserId = async () => {
 
 type Params = { params: Promise<{ id: string; fileId: string }> }
 
+export async function GET(_: Request, { params }: Params) {
+  const userId = await getUserId()
+  if (!userId) return unauthorized()
+
+  try {
+    const { id, fileId } = await params
+    const profile = await repo.getProfile(userId, id)
+    if (!profile) return notFound()
+
+    const target = (profile.contextFiles ?? []).find((f) => f.id === fileId)
+    if (!target) return notFound()
+
+    const file = await storage.getFile(userId, id, fileId)
+    return new Response(Buffer.from(file.body), {
+      headers: {
+        'Content-Type': file.contentType ?? 'application/octet-stream',
+        'Content-Disposition': `inline; filename="${file.fileName ?? target.name}"`,
+      },
+    })
+  } catch (err) {
+    console.error('Failed to fetch file', err)
+    return NextResponse.json({ error: 'Failed to fetch file' }, { status: 500 })
+  }
+}
+
 export async function DELETE(_: Request, { params }: Params) {
   const userId = await getUserId()
   if (!userId) return unauthorized()

@@ -870,6 +870,10 @@ export default function StudentProfilesPage() {
   }
 
   const stats = selectedStudent.stats
+  const pdfContextFiles =
+    selectedStudent.contextFiles?.filter((file) =>
+      (file.name || '').toLowerCase().endsWith('.pdf')
+    ) ?? []
 
   const handleBaseStoryChange = (value: string) => {
     setBaseStoryDraft(value)
@@ -1315,6 +1319,41 @@ export default function StudentProfilesPage() {
                         {profileFileLoading ? 'Uploading...' : 'Add'}
                       </Button>
                     </div>
+
+                    {pdfContextFiles.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[11px] text-zinc-400">PDF previews</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {pdfContextFiles.map((file) => (
+                            <div
+                              key={file.id}
+                              className="rounded-lg border border-zinc-800/80 bg-zinc-950/85 p-2"
+                            >
+                              <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-300">
+                                <span className="truncate" title={file.label || file.name}>
+                                  {file.label || file.name}
+                                </span>
+                                <Link
+                                  href={`/api/profiles/${selectedStudent.id}/files/${file.id}`}
+                                  target="_blank"
+                                  className="text-[10px] text-fuchsia-200 hover:text-fuchsia-100"
+                                >
+                                  Open
+                                </Link>
+                              </div>
+                              <div className="mt-2 h-40 overflow-hidden rounded-md border border-zinc-800">
+                                <iframe
+                                  title={`Preview ${file.name}`}
+                                  src={`/api/profiles/${selectedStudent.id}/files/${file.id}#page=1&view=FitH&toolbar=0&navpanes=0&statusbar=0`}
+                                  className="h-full w-full bg-zinc-950"
+                                  scrolling="no"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>

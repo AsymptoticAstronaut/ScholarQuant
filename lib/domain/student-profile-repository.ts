@@ -31,5 +31,9 @@ export interface StudentContextFileStorage {
     profileId: string,
     fileId: string
   ): Promise<void>
+  getFile(
+    userId: string,
+    profileId: string,
+    fileId: string
+  ): Promise<{ body: Uint8Array; contentType?: string; fileName?: string }>
 }
-
