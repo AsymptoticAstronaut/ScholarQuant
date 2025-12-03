@@ -1,5 +1,10 @@
 // app/api/generate-draft/route.ts
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+
+import { authOptions } from '@/lib/auth/options'
+import { PostgresStudentProfileRepository } from '@/lib/server/postgres-student-profile-repository'
+import type { StudentStats } from '@/types/student-profile'
 
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-5'
@@ -7,6 +12,8 @@ const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-5'
 const MAX_JSON_BODY_BYTES = 100 * 1024
 const MAX_TEXT_FIELD_LENGTH = 10_000
 const MAX_CONSTRAINTS = 12
+
+const repo = new PostgresStudentProfileRepository()
 
 // If Claude is unavailable, return a safe demo draft (so UI can stay clean).
 const DEMO_DRAFT =
@@ -68,6 +75,37 @@ const extractTextFromClaude = (content: Array<{ text?: string }> = []) =>
 const safeTrim = (value: unknown, max = MAX_TEXT_FIELD_LENGTH): string => {
   if (typeof value !== 'string') return ''
   return value.trim().slice(0, max)
+}
+
+const getUserId = async () => {
+  const session = await getServerSession(authOptions)
+  return session?.user?.id ?? null
+}
+
+const incrementDraftStats = async (userId: string, profileId: string | undefined | null) => {
+  if (!profileId) return
+  try {
+    const profile = await repo.getProfile(userId, profileId)
+    if (!profile) return
+
+    const prevStats = profile.stats ?? {
+      scholarshipsMatched: 0,
+      draftsGenerated: 0,
+      avgAlignment: 0,
+    }
+
+    const nextStats: StudentStats = {
+      scholarshipsMatched: prevStats.scholarshipsMatched ?? 0,
+      draftsGenerated: (prevStats.draftsGenerated ?? 0) + 1,
+      avgAlignment: prevStats.avgAlignment ?? 0,
+      lastActiveAt: new Date().toISOString(),
+      topMatchIds: prevStats.topMatchIds,
+    }
+
+    await repo.updateProfile(userId, profileId, { stats: nextStats })
+  } catch (err) {
+    console.error('Failed to increment draft stats', err)
+  }
 }
 
 export async function POST(request: Request) {
@@ -277,6 +315,16 @@ export async function POST(request: Request) {
 
   const claudeData = await response.json()
   const draft = extractTextFromClaude(claudeData?.content ?? [])
+
+  // Best-effort: increment profile draft counter for the selected student.
+  try {
+    const userId = await getUserId()
+    if (userId) {
+      await incrementDraftStats(userId, body.studentId ?? undefined)
+    }
+  } catch (err) {
+    console.error('Failed to update draft stats after generation', err)
+  }
 
   return NextResponse.json({
     draft,

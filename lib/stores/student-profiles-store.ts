@@ -254,6 +254,18 @@ export const useStudentProfileStore = create<StudentProfileState>()(
             const profiles = [...get().profiles, created]
             const selectedProfileId = get().selectedProfileId ?? created.id
             set({ profiles, selectedProfileId })
+
+            // Best-effort: log to activity API (non-blocking).
+            void fetch('/api/activity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                type: 'profile_created',
+                description: `Created profile: ${created.name}`,
+              }),
+            }).catch(() => undefined)
+
             return created
           })
           .catch((err) => {
@@ -286,6 +298,17 @@ export const useStudentProfileStore = create<StudentProfileState>()(
               p.id === id ? { ...p, ...updated } : p
             ),
           })
+
+          // Best-effort: log to activity API (non-blocking).
+          void fetch('/api/activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              type: 'profile_updated',
+              description: `Updated profile: ${updated.name}`,
+            }),
+          }).catch(() => undefined)
         } catch (err: any) {
           set({ error: err?.message ?? 'Failed to save profile' })
           throw err

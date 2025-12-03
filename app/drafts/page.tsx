@@ -658,6 +658,17 @@ export default function DraftStudioPage() {
       })
       reapplyLockedMarks(editor, lockedSegments)
       prevEditorTextRef.current = editor.getText()
+
+      // Best-effort: log to activity API (non-blocking).
+      void fetch('/api/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          type: 'draft_generated',
+          description: `Generated draft for ${selectedScholarship.name}`,
+        }),
+      }).catch(() => undefined)
     } catch (e) {
       const message =
         e instanceof Error ? e.message : 'Draft generation failed.'

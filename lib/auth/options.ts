@@ -1,6 +1,10 @@
 import type { NextAuthOptions } from 'next-auth'
 import CognitoProvider from 'next-auth/providers/cognito'
 
+import { PostgresActivityRepository } from '@/lib/server/postgres-activity-repository'
+
+const activityRepo = new PostgresActivityRepository()
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CognitoProvider({
@@ -32,6 +36,24 @@ export const authOptions: NextAuthOptions = {
         session.user.image = (token.picture as string | undefined) ?? session.user.image
       }
       return session
+    },
+  },
+  events: {
+    async signIn({ user, account }) {
+      try {
+        const userId = (user as { id?: string }).id
+        if (!userId) return
+
+        const provider = account?.provider ?? 'auth'
+        const description =
+          provider === 'cognito'
+            ? 'Signed in via Google'
+            : `Signed in via ${provider}`
+
+        await activityRepo.logEvent(userId, 'login', description)
+      } catch (err) {
+        console.error('Failed to log login activity', err)
+      }
     },
   },
 }

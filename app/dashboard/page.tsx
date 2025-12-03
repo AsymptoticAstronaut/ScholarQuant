@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { Github } from 'lucide-react'
@@ -34,6 +34,7 @@ import {
   type ScholarshipType,
   type DimensionId,
 } from '@/lib/stores/scholarships-store'
+import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
@@ -67,6 +68,13 @@ const DIMENSION_LABELS: Omit<Dimension, 'frequency'>[] = [
 ]
 
 type ScholarshipDashboardProps = {}
+
+type ActivityEvent = {
+  id: string
+  type: string
+  description: string
+  createdAt: string
+}
 
 function typeBadge(type: ScholarshipType) {
   const map: Record<ScholarshipType, string> = {
@@ -165,6 +173,28 @@ export default function ScholarshipDashboard(_props: ScholarshipDashboardProps) 
 
   const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>('')
 
+  const profiles = useStudentProfileStore((s) => s.profiles)
+  const loadProfiles = useStudentProfileStore((s) => s.loadProfiles)
+  const hasFetchedProfiles = useStudentProfileStore((s) => s.hasFetched)
+
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([])
+
+  useEffect(() => {
+    if (!hasFetchedProfiles) {
+      void loadProfiles()
+    }
+  }, [hasFetchedProfiles, loadProfiles])
+
+  useEffect(() => {
+    void fetch('/api/activity', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text())
+        return res.json() as Promise<ActivityEvent[]>
+      })
+      .then((events) => setActivityEvents(events))
+      .catch(() => setActivityEvents([]))
+  }, [])
+
   const selectedScholarship = useMemo(() => {
     if (scholarships.length === 0) return undefined
     if (!selectedScholarshipId) return scholarships[0]
@@ -183,8 +213,8 @@ export default function ScholarshipDashboard(_props: ScholarshipDashboardProps) 
   }, [scholarships])
 
   const totalScholarships = scholarships.length
-  const totalProfiles = 3
-  const totalDrafts = 18
+  const totalProfiles = profiles.length
+  const totalDrafts = activityEvents.filter((e) => e.type === 'draft_generated').length
 
   const avgGenericScore =
     scholarships.reduce((acc, s) => acc + s.genericScore, 0) /
@@ -816,31 +846,27 @@ export default function ScholarshipDashboard(_props: ScholarshipDashboardProps) 
                     Recent activity
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    What you’ve done so far in this demo.
+                    Latest actions in your workspace.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="relative space-y-3 text-xs">
                   <ul className="space-y-2">
-                    <TimelineItem
-                      time="12:04"
-                      label="Created a personalized draft for Community Builder Scholarship."
-                    />
-                    <TimelineItem
-                      time="11:57"
-                      label="Detected what the First-Gen Access Bursary cares about most."
-                    />
-                    <TimelineItem
-                      time="11:49"
-                      label="Added new STEM scholarships and analyzed patterns."
-                    />
-                    <TimelineItem
-                      time="11:32"
-                      label="Built your base profile with 3 anchor stories."
-                    />
-                    <TimelineItem
-                      time="11:20"
-                      label="Loaded the demo scholarship list."
-                    />
+                    {activityEvents.slice(0, 5).length ? (
+                      activityEvents.slice(0, 5).map((event) => (
+                        <TimelineItem
+                          key={event.id}
+                          time={new Date(event.createdAt).toLocaleTimeString(undefined, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          label={event.description}
+                        />
+                      ))
+                    ) : (
+                      <li className="text-[11px] text-zinc-500">
+                        Activity will appear here as you start using the app.
+                      </li>
+                    )}
                   </ul>
                 </CardContent>
               </Card>
