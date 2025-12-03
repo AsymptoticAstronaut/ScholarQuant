@@ -10,11 +10,8 @@ const storage = new S3StudentContextFileStorage()
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const MAX_LABEL_LENGTH = 256
-const ALLOWED_FILE_TYPES = [
+const ALLOWED_MIME_TYPES = [
   'application/pdf',
-  'application/msword',
-  'text/plain',
-  'text/markdown',
 ]
 
 const unauthorized = () =>
@@ -25,6 +22,22 @@ const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 }
 const getUserId = async () => {
   const session = await getServerSession(authOptions)
   return session?.user?.id ?? null
+}
+
+const detectMimeFromBuffer = (buffer: Buffer): string | null => {
+  if (buffer.length < 4) return null
+
+  // %PDF
+  if (
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46
+  ) {
+    return 'application/pdf'
+  }
+
+  return null
 }
 
 type Params = { params: Promise<{ id: string }> }
@@ -62,16 +75,20 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: 'Label is required' }, { status: 400 })
     }
 
-    // Enforce a per-file size limit to reduce DoS risk.
-    if (typeof file.size === 'number' && file.size > MAX_FILE_BYTES) {
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    if (buffer.length > MAX_FILE_BYTES) {
       return NextResponse.json({ error: 'File too large' }, { status: 413 })
     }
 
-    // Only allow a small set of document/text types.
-    const fileType = file.type
-    if (fileType && !ALLOWED_FILE_TYPES.includes(fileType)) {
+    const detectedType = detectMimeFromBuffer(buffer)
+    if (!detectedType || !ALLOWED_MIME_TYPES.includes(detectedType)) {
       return NextResponse.json(
-        { error: 'Unsupported file type' },
+        {
+          error:
+            'Unsupported or unsafe file type. Please upload a PDF.',
+        },
         { status: 400 }
       )
     }
@@ -79,7 +96,7 @@ export async function POST(req: Request, { params }: Params) {
     const profile = await repo.getProfile(userId, id)
     if (!profile) return notFound()
 
-    const uploaded = await storage.uploadFile(userId, id, file, { label })
+    const uploaded = await storage.uploadFile(userId, id, arrayBuffer, { label })
 
     const nextFiles = [...(profile.contextFiles ?? []), uploaded]
     const updated = await repo.updateProfile(userId, id, {
