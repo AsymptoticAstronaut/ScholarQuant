@@ -21,20 +21,15 @@ const getEnv = (key: string, fallback?: string) => {
 
 export class S3StudentContextFileStorage implements StudentContextFileStorage {
   private client: S3Client
-  private bucket: string
+  private bucket: string | null
 
   constructor(opts: S3StorageOptions = {}) {
-    const bucket = opts.bucket ?? getEnv('STUDENT_FILES_BUCKET')
-    if (!bucket) {
-      throw new Error('STUDENT_FILES_BUCKET env var is required for S3 uploads')
-    }
-
     const region = opts.region ?? getEnv('AWS_REGION') ?? 'us-east-1'
 
     this.client = new S3Client({
       region,
     })
-    this.bucket = bucket
+    this.bucket = opts.bucket ?? getEnv('STUDENT_FILES_BUCKET') ?? null
   }
 
   async listFiles(_: string, __: string): Promise<StudentContextFile[]> {
@@ -56,9 +51,11 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
     const body =
       file instanceof ArrayBuffer ? Buffer.from(file) : Buffer.from(await file.arrayBuffer())
 
+    const bucket = this.getBucket()
+
     await this.client.send(
       new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
         Body: body,
         ContentType: contentType,
@@ -78,9 +75,11 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
 
   async deleteFile(userId: string, profileId: string, fileId: string): Promise<void> {
     const key = `${userId}/${profileId}/${fileId}`
+    const bucket = this.getBucket()
+
     await this.client.send(
       new DeleteObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
       })
     )
@@ -92,9 +91,11 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
     fileId: string
   ): Promise<{ body: Uint8Array; contentType?: string; fileName?: string }> {
     const key = `${userId}/${profileId}/${fileId}`
+    const bucket = this.getBucket()
+
     const result = await this.client.send(
       new GetObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
       })
     )
@@ -111,6 +112,14 @@ export class S3StudentContextFileStorage implements StudentContextFileStorage {
       contentType: result.ContentType || undefined,
       fileName,
     }
+  }
+
+  private getBucket(): string {
+    const bucket = this.bucket ?? getEnv('STUDENT_FILES_BUCKET')
+    if (!bucket) {
+      throw new Error('STUDENT_FILES_BUCKET env var is required for S3 uploads')
+    }
+    return bucket
   }
 
   private extractName(file: Blob | ArrayBuffer): string | undefined {
