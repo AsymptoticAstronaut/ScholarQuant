@@ -6,6 +6,8 @@ import { PostgresStudentProfileRepository } from '@/lib/server/postgres-student-
 
 const repo = new PostgresStudentProfileRepository()
 
+const MAX_PROFILE_JSON_BYTES = 128 * 1024
+
 const unauthorized = () =>
   NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -31,6 +33,11 @@ export async function POST(req: Request) {
   const userId = await getUserId()
   if (!userId) return unauthorized()
 
+  const contentLength = req.headers.get('content-length')
+  if (contentLength && Number(contentLength) > MAX_PROFILE_JSON_BYTES) {
+    return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+  }
+
   try {
     const body = await req.json()
     const profile = await repo.createProfile(userId, body)
@@ -40,4 +47,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
   }
 }
-

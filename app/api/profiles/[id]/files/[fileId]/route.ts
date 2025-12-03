@@ -18,6 +18,12 @@ const getUserId = async () => {
   return session?.user?.id ?? null
 }
 
+const sanitizeFilename = (name: string): string => {
+  const cleaned = name.replace(/[\r\n"]/g, '_').trim()
+  if (!cleaned) return 'download'
+  return cleaned.slice(0, 200)
+}
+
 type Params = { params: Promise<{ id: string; fileId: string }> }
 
 export async function GET(_: Request, { params }: Params) {
@@ -33,10 +39,12 @@ export async function GET(_: Request, { params }: Params) {
     if (!target) return notFound()
 
     const file = await storage.getFile(userId, id, fileId)
+    const filename = sanitizeFilename(file.fileName ?? target.name)
+
     return new Response(Buffer.from(file.body), {
       headers: {
         'Content-Type': file.contentType ?? 'application/octet-stream',
-        'Content-Disposition': `inline; filename="${file.fileName ?? target.name}"`,
+        'Content-Disposition': `inline; filename="${filename}"`,
       },
     })
   } catch (err) {

@@ -7,6 +7,11 @@ import { EMPTY_FEATURES } from '@/types/student-profile'
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-5'
 
+const MAX_INTAKE_JSON_BYTES = 128 * 1024
+const MAX_ANSWER_LENGTH = 4000
+const MAX_FILE_TEXT_LENGTH = 16_000
+const MAX_FILES = 8
+
 type IntakePayload = {
   basics?: {
     name?: string
@@ -121,8 +126,55 @@ const normalizeTags = (tags: string[] | undefined) =>
         .slice(0, 6)
     : []
 
+const safeTrim = (value: unknown, max: number) => {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.slice(0, max)
+}
+
+const sanitizeIntakePayload = (payload: IntakePayload): IntakePayload => {
+  const answers = payload.answers
+    ? (Object.fromEntries(
+        Object.entries(payload.answers).map(([key, val]) => [
+          key,
+          safeTrim(val, MAX_ANSWER_LENGTH),
+        ])
+      ) as IntakePayload['answers'])
+    : undefined
+
+  const files = Array.isArray(payload.files)
+    ? payload.files.slice(0, MAX_FILES).map((f) => ({
+        name: safeTrim(f.name, 256) ?? '',
+        label: safeTrim(f.label, 256) ?? '',
+        text: safeTrim(f.text, MAX_FILE_TEXT_LENGTH),
+      }))
+    : undefined
+
+  return {
+    ...payload,
+    baseStory: safeTrim(payload.baseStory, MAX_ANSWER_LENGTH),
+    answers,
+    files,
+  }
+}
+
 export async function POST(req: Request) {
-  const payload = (await req.json()) as IntakePayload
+  const contentLength = req.headers.get('content-length')
+  if (contentLength && Number(contentLength) > MAX_INTAKE_JSON_BYTES) {
+    return NextResponse.json(
+      { error: 'Request body too large' },
+      { status: 413 }
+    )
+  }
+
+  let rawPayload: IntakePayload
+  try {
+    rawPayload = (await req.json()) as IntakePayload
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const payload = sanitizeIntakePayload(rawPayload)
   const baseFallback = payload.baseStory?.trim() || composeBaseStory(payload.answers) || ''
 
   const apiKey = process.env.ANTHROPIC_API_KEY

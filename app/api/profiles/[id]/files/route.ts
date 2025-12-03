@@ -8,6 +8,15 @@ import { S3StudentContextFileStorage } from '@/lib/server/s3-student-context-fil
 const repo = new PostgresStudentProfileRepository()
 const storage = new S3StudentContextFileStorage()
 
+const MAX_FILE_BYTES = 5 * 1024 * 1024
+const MAX_LABEL_LENGTH = 256
+const ALLOWED_FILE_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'text/plain',
+  'text/markdown',
+]
+
 const unauthorized = () =>
   NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -43,13 +52,28 @@ export async function POST(req: Request, { params }: Params) {
     const { id } = await params
     const formData = await req.formData()
     const file = formData.get('file')
-    const label = (formData.get('label') as string | null)?.trim() ?? ''
+    const rawLabel = (formData.get('label') as string | null) ?? ''
+    const label = rawLabel.trim().slice(0, MAX_LABEL_LENGTH)
 
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: 'File is required' }, { status: 400 })
     }
     if (!label) {
       return NextResponse.json({ error: 'Label is required' }, { status: 400 })
+    }
+
+    // Enforce a per-file size limit to reduce DoS risk.
+    if (typeof file.size === 'number' && file.size > MAX_FILE_BYTES) {
+      return NextResponse.json({ error: 'File too large' }, { status: 413 })
+    }
+
+    // Only allow a small set of document/text types.
+    const fileType = file.type
+    if (fileType && !ALLOWED_FILE_TYPES.includes(fileType)) {
+      return NextResponse.json(
+        { error: 'Unsupported file type' },
+        { status: 400 }
+      )
     }
 
     const profile = await repo.getProfile(userId, id)

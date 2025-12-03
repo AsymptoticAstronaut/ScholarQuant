@@ -65,6 +65,14 @@ const DIMENSIONS: Dimension[] = [
 type ScholarshipType = 'Merit' | 'Community' | 'STEM' | 'Access'
 type StarterFile = { id: string; name: string; label: string; file: File; previewText: string }
 
+const PROFILE_MAX_FILE_BYTES = 5 * 1024 * 1024
+const PROFILE_ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'text/plain',
+  'text/markdown',
+]
+
 const SCHOLARSHIP_TYPES: ScholarshipType[] = ['Merit', 'Community', 'STEM', 'Access']
 
 const STARTER_DEFAULT = {
@@ -331,6 +339,21 @@ export default function StudentProfilesPage() {
 
   const handleAddFile = async () => {
     if (!pendingFile || !pendingFileLabel.trim()) return
+
+    if (pendingFile.size > PROFILE_MAX_FILE_BYTES) {
+      setCreateError('File too large. Maximum size is 5 MB.')
+      return
+    }
+
+    if (pendingFile.type && !PROFILE_ALLOWED_MIME_TYPES.includes(pendingFile.type)) {
+      setCreateError(
+        'Unsupported file type. Please upload a PDF, Word document, or plain text file.'
+      )
+      return
+    }
+
+    setCreateError(null)
+
     const textContent = await pendingFile.text()
     const previewText = textContent.slice(0, 4000)
     setUploadedFiles((prev) => [
@@ -353,6 +376,22 @@ export default function StudentProfilesPage() {
 
   const handleProfileAddFile = async () => {
     if (!selectedStudent || !profilePendingFile || !profileFileLabel.trim()) return
+
+    if (profilePendingFile.size > PROFILE_MAX_FILE_BYTES) {
+      setProfileFileError('File too large. Maximum size is 5 MB.')
+      return
+    }
+
+    if (
+      profilePendingFile.type &&
+      !PROFILE_ALLOWED_MIME_TYPES.includes(profilePendingFile.type)
+    ) {
+      setProfileFileError(
+        'Unsupported file type. Please upload a PDF, Word document, or plain text file.'
+      )
+      return
+    }
+
     setProfileFileLoading(true)
     setProfileFileError(null)
     try {
@@ -367,7 +406,14 @@ export default function StudentProfilesPage() {
       })
 
       if (!res.ok) {
-        throw new Error(await res.text())
+        const contentType = res.headers.get('content-type') ?? ''
+        if (contentType.includes('application/json')) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null
+          const message = data?.error || 'Failed to upload file'
+          throw new Error(message)
+        }
+        const text = await res.text().catch(() => 'Failed to upload file')
+        throw new Error(text || 'Failed to upload file')
       }
 
       const files = (await res.json()) as StudentProfile['contextFiles']
@@ -391,7 +437,14 @@ export default function StudentProfilesPage() {
         credentials: 'include',
       })
       if (!res.ok) {
-        throw new Error(await res.text())
+        const contentType = res.headers.get('content-type') ?? ''
+        if (contentType.includes('application/json')) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null
+          const message = data?.error || 'Failed to remove file'
+          throw new Error(message)
+        }
+        const text = await res.text().catch(() => 'Failed to remove file')
+        throw new Error(text || 'Failed to remove file')
       }
       const files = (await res.json()) as StudentProfile['contextFiles']
       updateProfile(selectedStudent.id, { contextFiles: files ?? [] })
@@ -466,7 +519,14 @@ export default function StudentProfilesPage() {
       })
 
       if (!res.ok) {
-        throw new Error(await res.text())
+        const contentType = res.headers.get('content-type') ?? ''
+        if (contentType.includes('application/json')) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null
+          const message = data?.error || 'Failed to upload file'
+          throw new Error(message)
+        }
+        const text = await res.text().catch(() => 'Failed to upload file')
+        throw new Error(text || 'Failed to upload file')
       }
       latestFiles = (await res.json()) as StudentProfile['contextFiles']
     }

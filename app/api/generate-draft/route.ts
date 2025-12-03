@@ -4,6 +4,10 @@ import { NextResponse } from 'next/server'
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-5'
 
+const MAX_JSON_BODY_BYTES = 100 * 1024
+const MAX_TEXT_FIELD_LENGTH = 10_000
+const MAX_CONSTRAINTS = 12
+
 // If Claude is unavailable, return a safe demo draft (so UI can stay clean).
 const DEMO_DRAFT =
   `When I began building practical robotics systems for middle-school classrooms, I was motivated by a simple mismatch: many students were curious about engineering, but their schools lacked the equipment and mentorship to make it feel reachable. I set out to design low-cost kits that could be assembled with everyday materials, then paired them with workshops that made the underlying concepts clear and exciting.
@@ -61,10 +65,28 @@ const extractTextFromClaude = (content: Array<{ text?: string }> = []) =>
     .join('\n\n')
     .trim()
 
-export async function POST(request: Request) {
-  const body = (await request.json()) as DraftRequestPayload
+const safeTrim = (value: unknown, max = MAX_TEXT_FIELD_LENGTH): string => {
+  if (typeof value !== 'string') return ''
+  return value.trim().slice(0, max)
+}
 
-  const baseStory = body.baseStory?.trim()
+export async function POST(request: Request) {
+  const contentLength = request.headers.get('content-length')
+  if (contentLength && Number(contentLength) > MAX_JSON_BODY_BYTES) {
+    return NextResponse.json(
+      { error: 'Request body too large' },
+      { status: 413 }
+    )
+  }
+
+  let body: DraftRequestPayload
+  try {
+    body = (await request.json()) as DraftRequestPayload
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const baseStory = safeTrim(body.baseStory)
   const scholarship = body.scholarship
   const studentProfile = body.studentProfile
 
@@ -83,13 +105,14 @@ export async function POST(request: Request) {
   const constraints =
     body.constraints && Array.isArray(body.constraints) && body.constraints.length > 0
       ? body.constraints
-          .map((rule) => (typeof rule === 'string' ? rule.trim() : ''))
+          .slice(0, MAX_CONSTRAINTS)
+          .map((rule) => safeTrim(rule, 1_000))
           .filter(Boolean)
       : FALLBACK_CONSTRAINTS
 
-  const positiveSignals = body.positiveSignals?.trim() ?? ''
-  const negativeSignals = body.negativeSignals?.trim() ?? ''
-  const userMemory = body.userMemory?.trim() ?? body.userMemory ?? body.userMemory ?? ''
+  const positiveSignals = safeTrim(body.positiveSignals)
+  const negativeSignals = safeTrim(body.negativeSignals)
+  const userMemory = safeTrim(body.userMemory)
   const memoryNotes = Array.isArray(body.revisionRequests)
     ? body.revisionRequests.map((r) => ({
         paragraphIndex: r.paragraphIndex ?? null,
@@ -101,7 +124,7 @@ export async function POST(request: Request) {
   const lockedSegments =
     Array.isArray(body.lockedSegments) && body.lockedSegments.length
       ? body.lockedSegments
-          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .map((s) => safeTrim(s, MAX_TEXT_FIELD_LENGTH))
           .filter(Boolean)
       : []
 
