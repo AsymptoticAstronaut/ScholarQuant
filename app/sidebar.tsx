@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   BookOpenCheck,
   UserCircle2,
+  UserCircle2 as UserIcon,
   FileText,
   Activity,
   SlidersHorizontal,
