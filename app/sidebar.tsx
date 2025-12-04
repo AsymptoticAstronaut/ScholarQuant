@@ -15,10 +15,8 @@ import {
   Mail,
   ExternalLink,
   ChevronDown,
-  UserCircle2 as UserIcon,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { signOut } from 'next-auth/react'
 import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 const EMAIL = 'yasser.noori@mail.utoronto.ca'
@@ -338,18 +336,6 @@ export function Sidebar() {
                 </div>
                 <ExternalLink className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
               </a>
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)]"
-              >
-                <div className="flex items-center gap-3">
-                  <UserIcon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
-                  <span className="text-sm font-normal text-zinc-800 dark:text-zinc-100">
-                    Sign out
-                  </span>
-                </div>
-              </button>
             </div>
           </div>
         </div>

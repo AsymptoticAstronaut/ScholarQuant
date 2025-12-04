@@ -328,31 +328,12 @@ export default function ScholarshipsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>System Status: Ready</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span>Online</span>
+              </div>
             </div>
-
-            <Separator orientation="vertical" className="h-6 bg-zinc-700" />
-
-            <Magnetic intensity={0.3} springOptions={{ bounce: 0 }}>
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1 rounded-full border-zinc-700 bg-zinc-900/80 text-xs text-zinc-200 hover:bg-zinc-800"
-              >
-                <Link
-                  href="https://github.com/AsymptoticAstronaut/Claude"
-                  target="_blank"
-                >
-                  <Github className="h-3.5 w-3.5" />
-                  <span>View repo</span>
-                </Link>
-              </Button>
-            </Magnetic>
-          </div>
         </header>
 
         {/* Content */}
