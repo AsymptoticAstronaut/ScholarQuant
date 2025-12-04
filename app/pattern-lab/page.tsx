@@ -1081,12 +1081,7 @@ function ForceCorrelationCard({
           <ul className="list-disc pl-4 space-y-1">
             <li>Each node is a scholarship dimension.</li>
             <li>
-              Visible lines show measured correlations. Hotter and thicker lines mean
-              stronger relationships.
-            </li>
-            <li>
-              Dimensions connected by strong lines sit closer together because the
-              layout uses correlation strength as attraction.
+              Positions are based on measured correlations.
             </li>
           </ul>
         </div>
