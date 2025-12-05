@@ -1011,7 +1011,7 @@ export default function StudentProfilesPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-200">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>System status: Online</span>
+              <span>Online</span>
             </div>
 
             <Button

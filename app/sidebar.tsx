@@ -4,21 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Sun,
-  Moon,
   LayoutDashboard,
   BookOpenCheck,
   UserCircle2,
+  UserCircle2 as UserIcon,
   FileText,
   Activity,
   SlidersHorizontal,
   Mail,
   ExternalLink,
   ChevronDown,
-  UserCircle2 as UserIcon,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
-import { signOut } from 'next-auth/react'
 import { useStudentProfileStore } from '@/lib/stores/student-profiles-store'
 
 const EMAIL = 'yasser.noori@mail.utoronto.ca'
@@ -27,9 +23,7 @@ const GITHUB = 'https://github.com/AsymptoticAstronaut'
 
 export function Sidebar() {
   const router = useRouter()
-  const { theme, setTheme, resolvedTheme } = useTheme()
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const [studentMenuOpen, setStudentMenuOpen] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const studentMenuRef = useRef<HTMLDivElement>(null)
@@ -42,7 +36,6 @@ export function Sidebar() {
     [selectedProfileId, studentProfiles]
   )
 
-  useEffect(() => setMounted(true), [])
   useEffect(() => {
     const unsub = useStudentProfileStore.persist?.onFinishHydration?.(() => setHydrated(true))
     if (useStudentProfileStore.persist?.hasHydrated?.()) setHydrated(true)
@@ -92,8 +85,6 @@ export function Sidebar() {
     else root.classList.remove(cls)
     window.dispatchEvent(new CustomEvent('sidebarChange', { detail: open }))
   }, [open])
-
-  const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light')
 
   const navItems = [
     { href: '/profiles', label: 'Profiles', Icon: UserCircle2 },
@@ -155,22 +146,6 @@ export function Sidebar() {
               <p className="leading-tight text-xs text-zinc-500 dark:text-zinc-400">
               </p>
             </div>
-
-            {mounted ? (
-              <button
-                onClick={toggleTheme}
-                className="hidden cursor-pointer rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 md:inline-flex"
-                aria-label="Toggle theme"
-              >
-                {resolvedTheme === 'dark' ? (
-                  <Sun className="h-4 w-4 text-zinc-200" />
-                ) : (
-                  <Moon className="h-4 w-4 text-zinc-800" />
-                )}
-              </button>
-            ) : (
-              <div className="hidden h-4 w-4 md:inline-flex" aria-hidden />
-            )}
           </div>
 
           {/* Student selector */}
@@ -338,18 +313,6 @@ export function Sidebar() {
                 </div>
                 <ExternalLink className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
               </a>
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-white/3 dark:hover:bg-white/3 hover:backdrop-blur-[1px] hover:shadow-[inset_0_0_0_0.4px_rgba(255,255,255,0.15)]"
-              >
-                <div className="flex items-center gap-3">
-                  <UserIcon className="h-4 w-4 text-zinc-600 dark:text-zinc-200" />
-                  <span className="text-sm font-normal text-zinc-800 dark:text-zinc-100">
-                    Sign out
-                  </span>
-                </div>
-              </button>
             </div>
           </div>
         </div>
